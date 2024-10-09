@@ -1,9 +1,0 @@
-# Credentials
-# Salesforce
-username: 'cso_analytics_user@navex.com'
-password: 'C$oAnalyticsU$er7'
-security_token: 's09vgwKJoNefxkONBnW9h4Fa'
-
-# SFTP
-sftp_user: "alex.soderquist@navex.com"
-sftp_pwd: "tS522mWp"

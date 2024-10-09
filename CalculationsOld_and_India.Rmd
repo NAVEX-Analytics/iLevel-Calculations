@@ -116,6 +116,8 @@ qualified_leads_query <- paste("SELECT
                     WHERE
                       Cross_Sell_Classification__c IN ('Upsell', 'Cross-sell', 'New')
                       AND Include_In_Pipeline__c = TRUE
+                      AND Include_In_Bookings__c = TRUE
+                      AND Product2.Pricing_Type__c = 'Annual'
                       AND Opportunity.AccountId != null
                       AND Opportunity.Amount > 0
                       AND Opportunity.ARR_Net__c > 0
@@ -170,7 +172,7 @@ proj_hours_sold_query <- paste0("SELECT
         Milestone_PM__r.pse__Region__r.Name,
         Milestone_PM_s_Manager__r.Name,
         Account__r.Reporting_Region__c,
-        pse__Project__r.pse__Opportunity__r.CloseDate,
+        Opportunity__r.CloseDate,
         CreatedDate
       FROM
         pse__Milestone__c
@@ -184,8 +186,6 @@ proj_hours_sold_query <- paste0("SELECT
           'ESG',
           'GRC Insights',
           'IntegriLink',
-          'IRM',
-          'Lockpath',
           'NG Compliance Training',
           'NG Gateway',
           'NG Policy Management',
@@ -201,10 +201,11 @@ proj_hours_sold_query <- paste0("SELECT
           'Other Services',
           'Required Setup',
           'Professional Services')
+        AND pse__Project__r.pse__Group__r.Name IN ('Implementation', 'Professional Services')
         AND pse__Project__r.pse__Is_Template__c = FALSE
-        AND ((pse__Project__r.pse__Opportunity__r.CloseDate >= ", from_date, "
+        AND ((pse__Project__r.pse__Opportunity__r.CloseDate >= ", ymd(from_date) %m+% months(-2), "
           AND pse__Project__r.pse__Opportunity__r.CloseDate <= ", to_date , ")
-        OR (CreatedDate >= ", from_date, "T00:00:00Z 
+        OR (CreatedDate >= ", ymd(from_date) %m+% months(-2), "T00:00:00Z 
           AND CreatedDate <= ", to_date, "T23:59:59Z 
           AND Name LIKE '%Course Swap%'))")
 
@@ -408,26 +409,83 @@ on_time_completion_query <- paste("SELECT
           'Telephony',
           'WhistleB')")
 
-cases_query <- paste0("SELECT Id,
+support_cases_opened_query <- paste0("SELECT Id,
                       Client_Care_Team__c,
                       Age_Days__c,
                       Skill__c,
-                      Record_Type__c,
                       CreatedDate,
                       ClosedDate,
                       Account.Reporting_Region__c,
                       Owner__r.Name,
-                      Owner__r.Location__c
+                      Owner__r.Location__c,
+                      Product_Family_Picklist__c
                       FROM
                       Case
                       WHERE
-                             Record_Type__c IN ('Customer Support Requests', 'Discontinued Client')
+                             Record_Type__c = 'Customer Support Requests'
                              AND Status != 'Duplicate'
                              AND (Account.Test_Account__c = FALSE OR Account.Id = '0015000000iMvunAAC')
                              AND Client_Care_Team__c != 'NetClaim'
-                             AND ((CreatedDate >= ", from_date, "T00:00:00Z AND CreatedDate <= ", to_date, "T00:00:00Z)
-                              OR(ClosedDate >= ", from_date, "T00:00:00Z AND ClosedDate <= ", to_date, "T00:00:00Z))"
-                      )
+                             AND CreatedDate >= ", from_date, "T00:00:00Z 
+                             AND CreatedDate <= ", to_date, "T00:00:00Z
+                      ")
+
+support_cases_closed_query <- paste0("SELECT Id,
+                      Client_Care_Team__c,
+                      Age_Days__c,
+                      Skill__c,
+                      CreatedDate,
+                      ClosedDate,
+                      Account.Reporting_Region__c,
+                      Owner__r.Name,
+                      Owner__r.Location__c,
+                      Product_Family_Picklist__c
+                      FROM
+                      Case
+                      WHERE
+                             Record_Type__c = 'Customer Support Requests'
+                             AND Status != 'Duplicate'
+                             AND (Account.Test_Account__c = FALSE OR Account.Id = '0015000000iMvunAAC')
+                             AND Client_Care_Team__c != 'NetClaim'
+                             AND IsClosed = TRUE
+                             AND ClosedDate >= ", from_date, "T00:00:00Z 
+                             AND ClosedDate <= ", to_date, "T00:00:00Z"
+)
+
+disc_cases_o_query <- paste0("SELECT Id,
+                      CreatedDate,
+                      ClosedDate,
+                      Account.Reporting_Region__c,
+                      Owner__r.Name,
+                      Owner__r.Location__c,
+                      Product_Family_Picklist__c
+                      FROM
+                      Case
+                      WHERE
+                             Record_Type__c = 'Discontinued Client'
+                             AND Status != 'Duplicate'
+                             AND (Account.Test_Account__c = FALSE OR Account.Id = '0015000000iMvunAAC')
+                             AND CreatedDate >= ", from_date, "T00:00:00Z
+                             AND CreatedDate <= ", to_date, "T23:59:59Z"
+                     )
+
+disc_cases_c_query <-paste0("SELECT Id,
+                      CreatedDate,
+                      ClosedDate,
+                      Account.Reporting_Region__c,
+                      Owner__r.Name,
+                      Owner__r.Location__c,
+                      Product_Family_Picklist__c
+                      FROM
+                      Case
+                      WHERE
+                             Record_Type__c = 'Discontinued Client'
+                             AND Status != 'Duplicate'
+                             AND IsClosed = TRUE
+                             AND (Account.Test_Account__c = FALSE OR Account.Id = '0015000000iMvunAAC')
+                             AND ClosedDate >= ", from_date, "T00:00:00Z
+                             AND ClosedDate <= ", to_date, "T23:59:59Z"
+                     )
 
 cases_backlog_query <- ("SELECT Id,
                       Client_Care_Team__c,
@@ -556,7 +614,10 @@ proj_hours_complete <- sf_query(proj_hours_complete_query)
 proj_hours_overages <- sf_query(proj_hours_overages_query)
 proj_hours_backlog <- sf_query(proj_hours_backlog_query)
 on_time_completion <- sf_query(on_time_completion_query)
-cases <- sf_query(cases_query)
+support_cases_o <- sf_query(support_cases_opened_query)
+support_cases_c <- sf_query(support_cases_closed_query)
+disc_cases_o <- sf_query(disc_cases_o_query)
+disc_cases_c <- sf_query(disc_cases_c_query)
 cases_backlog <- sf_query(cases_backlog_query)
 cases_milestones <- sf_query(cases_milestones_query)
 util <- sf_query(utilization_query)
@@ -750,7 +811,7 @@ issues_pre <- issues %>%
     location = Issue_Owner__r.Location__c,
     product = Product_Family__c,
     date_reported = Date_Reported__c,
-    date_closed = Date_Closed__c
+    date_resolved = Date_Closed__c
   )
 
 issues_opened <- issues_pre %>%
@@ -789,6 +850,59 @@ issues_opened <- issues_pre %>%
             ) %>% 
   bind_rows(issues_pre %>% 
               filter(between(date_reported, as.Date(from_date), as.Date(to_date)),
+                     product %in% "Lockpath") %>%
+              summarize(
+                `Region` = "Lockpath",
+                `Opened` = n()
+              )
+            )
+
+issues_closed <- issues_pre %>%
+  filter(between(date_resolved, as.Date(from_date), as.Date(to_date)),
+        !product %in% "Lockpath",
+        status %in% c("Resolved", "Closed - Resolved", "Closed - Unresolved",
+                      "Closed - NPS", "Closed - Unresponsive NPS", "Closed - Unresponsive Health Data")) %>% 
+  summarize(
+    `Region` = "Core",
+    `Opened` = n()
+  ) %>% 
+  bind_rows(issues_pre %>% 
+              filter(between(date_resolved, as.Date(from_date), as.Date(to_date)),
+                     !product %in% c("Lockpath", "WhistleB"),
+                     status %in% c("Resolved", "Closed - Resolved", "Closed - Unresolved",
+                      "Closed - NPS", "Closed - Unresponsive NPS", "Closed - Unresponsive Health Data"),
+                     location %in% "US") %>%
+              summarize(
+                `Region` = "US",
+                `Opened` = n()
+              )
+            ) %>% 
+  bind_rows(issues_pre %>% 
+              filter(between(date_resolved, as.Date(from_date), as.Date(to_date)),
+                     !product %in% "Lockpath",
+                     status %in% c("Resolved", "Closed - Resolved", "Closed - Unresolved",
+                      "Closed - NPS", "Closed - Unresponsive NPS", "Closed - Unresponsive Health Data"),
+                     location %in% "EU") %>%
+              summarize(
+                `Region` = "EU",
+                `Opened` = n()
+              )
+            ) %>% 
+  bind_rows(issues_pre %>% 
+              filter(between(date_resolved, as.Date(from_date), as.Date(to_date)),
+                     !product %in% "Lockpath",
+                     status %in% c("Resolved", "Closed - Resolved", "Closed - Unresolved",
+                      "Closed - NPS", "Closed - Unresponsive NPS", "Closed - Unresponsive Health Data"),
+                     location %in% "India") %>%
+              summarize(
+                `Region` = "India",
+                `Opened` = n()
+              )
+            ) %>% 
+  bind_rows(issues_pre %>% 
+              filter(between(date_resolved, as.Date(from_date), as.Date(to_date)),
+                     status %in% c("Resolved", "Closed - Resolved", "Closed - Unresolved",
+                      "Closed - NPS", "Closed - Unresponsive NPS", "Closed - Unresponsive Health Data"),
                      product %in% "Lockpath") %>%
               summarize(
                 `Region` = "Lockpath",
@@ -843,7 +957,8 @@ qlb_calc <- qlb_pre %>%
               summarize(
                 value = round(sum(opportunity_amount_usd, na.rm = TRUE), 2),
                 n = n_distinct(opportunity_id)
-        )) 
+        )) %>% 
+  arrange(opportunity_referrer_location)
 
 ```
 
@@ -882,8 +997,8 @@ surveys_pre <- surveys %>%
     )
 
 csat_core <- surveys_pre %>%
-  filter(!team %in% c("Lockpath"),
-         !product %in% c("Lockpath")) %>% 
+  filter(!team %in% c("Lockpath", "IRM"),
+         !product %in% c("Lockpath", "IRM")) %>% 
   group_by(`AE Segment`) %>% 
   summarize(
     `Customer Support` = round(mean(support_csat, na.rm = TRUE) * 10, 2),
@@ -892,8 +1007,8 @@ csat_core <- surveys_pre %>%
     `Professional Services` = round(mean(ps_comp_csat, na.rm = TRUE) * 10, 2),
     Count = n()
   ) %>% 
-  bind_rows(surveys_pre %>% filter(!team %in% c("Lockpath"),
-                                   !product %in% c("Lockpath")) %>% 
+  bind_rows(surveys_pre %>% filter(!team %in% c("Lockpath", "IRM"),
+                                   !product %in% c("Lockpath", "IRM")) %>% 
            summarize(
              `AE Segment` = "Total",
              `Customer Support` = round(mean(support_csat, na.rm = TRUE) * 10, 2),
@@ -905,8 +1020,8 @@ csat_core <- surveys_pre %>%
   
 csat_us <- surveys_pre %>% 
   filter(location %in% "US"|region %in% "US",
-         !team %in% "Lockpath",
-         !product %in% c("Lockpath", "WhistleB")) %>% 
+         !team %in% c("Lockpath", "IRM"),
+         !product %in% c("Lockpath", "IRM", "WhistleB")) %>% 
   group_by(`AE Segment`) %>% 
   summarize(
     `Customer Support` = round(mean(support_csat, na.rm = TRUE) * 10, 2),
@@ -916,8 +1031,8 @@ csat_us <- surveys_pre %>%
     Count = n()
   ) %>% 
   bind_rows(surveys_pre %>% filter(location %in% "US"|region %in% "US",
-                                   !team %in% c("Lockpath"),
-                                   !product %in% c("Lockpath", "WhistleB")) %>% 
+                                   !team %in% c("Lockpath", "IRM"),
+                                   !product %in% c("Lockpath", "IRM", "WhistleB")) %>% 
            summarize(
              `AE Segment` = "Total",
              `Customer Support` = round(mean(support_csat, na.rm = TRUE) * 10, 2),
@@ -929,8 +1044,8 @@ csat_us <- surveys_pre %>%
 
 csat_eu <- surveys_pre %>% 
   filter(location %in% "EU"|region %in% "EU",
-         !team %in% "Lockpath",
-         !product %in% "Lockpath") %>% 
+         !team %in% c("Lockpath", "IRM"),
+         !product %in% c("Lockpath", "IRM")) %>% 
   group_by(`AE Segment`) %>% 
   summarize(
     `Customer Support` = round(mean(support_csat, na.rm = TRUE) * 10, 2),
@@ -940,8 +1055,8 @@ csat_eu <- surveys_pre %>%
     Count = n()
   ) %>% 
   bind_rows(surveys_pre %>% filter(location %in% "EU"|region %in% "EU",
-                                   !team %in% c("Lockpath"),
-                                   !product %in% c("Lockpath")) %>% 
+                                   !team %in% c("Lockpath", "IRM"),
+                                   !product %in% c("Lockpath", "IRM")) %>% 
            summarize(
              `AE Segment` = "Total",
              `Customer Support` = round(mean(support_csat, na.rm = TRUE) * 10, 2),
@@ -953,8 +1068,8 @@ csat_eu <- surveys_pre %>%
 
 csat_india <- surveys_pre %>%
   filter(location %in% "India"|region %in% "India",
-         !team %in% "Lockpath",
-         !product %in% "Lockpath") %>% 
+         !team %in% c("Lockpath", "IRM"),
+         !product %in% c("Lockpath", "IRM")) %>% 
   group_by(`AE Segment`) %>% 
   summarize(
     `Customer Support` = round(mean(support_csat, na.rm = TRUE) * 10, 2),
@@ -975,7 +1090,7 @@ csat_india <- surveys_pre %>%
            ))
 
 csat_irm <- surveys_pre %>% 
-  filter(team %in% "Lockpath"|product %in% "Lockpath") %>% 
+  filter(team %in% c("Lockpath", "IRM")|product %in% c("Lockpath", "IRM")) %>% 
   group_by(`AE Segment`) %>% 
   summarize(
     `Customer Support` = round(mean(support_csat, na.rm = TRUE) * 10, 2),
@@ -995,7 +1110,7 @@ csat_irm <- surveys_pre %>%
 ```
 
 ```{r project_hours}
-proj_hours_sold <- proj_hours_sold %>%
+proj_hours_sold_pre <- proj_hours_sold %>%
   rename(
       milestone_id = Milestone_ID_18__c,
       milestone_name = Name,
@@ -1008,28 +1123,28 @@ proj_hours_sold <- proj_hours_sold %>%
       milestone_pm_region = Milestone_PM__r.pse__Region__r.Name,
       milestone_pm_manager = Milestone_PM_s_Manager__r.Name,
       account_region = Account__r.Reporting_Region__c,
-      opportunity_close_date = pse__Project__r.pse__Opportunity__r.CloseDate,
+      opportunity_close_date = Opportunity__r.CloseDate,
       created_date = CreatedDate
       ) %>% 
   mutate(
     group = case_when(
       product_gl_group %in% c("Required Setup", "Other Services") ~ "Implementation",
-                      TRUE ~ as.character(product_gl_group))
-  ) 
-  #  %>% 
-  #distinct(milestone_id, .keep_all = TRUE)
+      product_gl_group %in% c("Professional Services") ~ "Professional Services",
+      TRUE ~ as.character(product_gl_group))
+  )
 
-proj_hours_sold_core <- proj_hours_sold %>% 
+proj_hours_sold_core <- proj_hours_sold_pre %>% 
   filter(
-    !product_family %in% "Lockpath"
+    !product_family %in% c("Lockpath", "IRM"),
+    opportunity_close_date %within% (from_date %--% to_date) | (created_date %within% (from_date %--% to_date) & grepl("Course Swap", milestone_name))
   ) %>% 
-  group_by(group) %>% 
+  group_by(account_region, group) %>% 
   summarize(
     hours_sold = round(sum(hours_sold, na.rm = TRUE), 2),
     n = n()
   )
 
-proj_hours_sold_na <- proj_hours_sold %>% 
+proj_hours_sold_na <- proj_hours_sold_pre %>% 
   filter(
     !product_family %in% c("Lockpath", "WhistleB"),
     account_region == "AMER",
@@ -1041,7 +1156,7 @@ proj_hours_sold_na <- proj_hours_sold %>%
     n = n()
   )
 
-proj_hours_sold_eu <- proj_hours_sold %>% 
+proj_hours_sold_eu <- proj_hours_sold_pre %>% 
   filter(
     !product_family %in% "Lockpath",
     account_region == "EMEA"
@@ -1052,7 +1167,7 @@ proj_hours_sold_eu <- proj_hours_sold %>%
     n = n()
   )
 
-proj_hours_sold_india <- proj_hours_sold %>% 
+proj_hours_sold_india <- proj_hours_sold_pre %>% 
   filter(
     milestone_pm_region == "NAVEX India"
   ) %>% 
@@ -1220,9 +1335,9 @@ proj_hours_backlog_on_hold_core <- proj_hours_backlog_pre %>%
     n = n()
   )
 
-proj_hours_backlog_on_hold_core <- proj_hours_backlog_pre %>% 
+proj_hours_backlog_on_hold_us <- proj_hours_backlog_pre %>% 
   filter(milestone_status %in% "Delayed On-Hold",
-         grepl("India", milestone_pm_region)) %>% 
+         grepl("AMER", milestone_pm_region)) %>% 
   group_by(group, product) %>% 
   summarize(
     backlog_on_hold_hours = round(sum(backlog_hours, na.rm = TRUE), 2),
@@ -1313,10 +1428,129 @@ on_time_completion_india <- on_time_completion_pre %>%
 ```
 
 ```{r cases_opened_closed} 
-cases_pre <- cases %>% 
+support_cases_o_pre <- support_cases_o %>% 
   rename(
     product_team = Client_Care_Team__c,
     close_date = ClosedDate,
+    opened_date = CreatedDate,
+    skill = Skill__c,
+    reporting_region = Account.Reporting_Region__c,
+    location = Owner__r.Location__c,
+    owner_name = Owner__r.Name,
+    case_age = Age_Days__c,
+    
+  ) %>% 
+     mutate(Month = floor_date(close_date, unit="month"),
+            Product = case_when(
+              grepl("EthicsPoint|Telephony", product_team) ~ "EthicsPoint",
+              grepl("PolicyTech", product_team) ~ "PolicyTech",
+              grepl(" Training", product_team)~ "NAVEXEngage",
+              grepl("RiskRate", product_team) ~ "RiskRate",
+              grepl("Disclosures", product_team) ~ "Disclosures",
+              grepl("WhistleB", product_team) ~ "WhistleB",
+              grepl("ESG", product_team) ~ "ESG",
+              grepl("Lockpath|IRM", product_team) ~ "Lockpath",
+              product_team == TRUE ~ "Other"
+              )
+     )
+support_cases_c_pre <- support_cases_c %>% 
+  rename(
+    product_team = Client_Care_Team__c,
+    close_date = ClosedDate,
+    opened_date = CreatedDate,
+    skill = Skill__c,
+    reporting_region = Account.Reporting_Region__c,
+    location = Owner__r.Location__c,
+    owner_name = Owner__r.Name,
+    case_age = Age_Days__c,
+    
+  ) %>% 
+     mutate(Month = floor_date(close_date, unit="month"),
+            Product = case_when(
+              grepl("EthicsPoint|Telephony", product_team) ~ "EthicsPoint",
+              grepl("PolicyTech", product_team) ~ "PolicyTech",
+              grepl(" Training", product_team)~ "NAVEXEngage",
+              grepl("RiskRate", product_team) ~ "RiskRate",
+              grepl("Disclosures", product_team) ~ "Disclosures",
+              grepl("WhistleB", product_team) ~ "WhistleB",
+              grepl("ESG", product_team) ~ "ESG",
+              grepl("Lockpath|IRM", product_team) ~ "Lockpath",
+              product_team == TRUE ~ "Other"
+              )
+     )
+
+cases_opened <- support_cases_o_pre %>% 
+  filter(opened_date %within% (from_date %--% to_date)) %>% 
+  mutate(reporting_region = case_when(Product %in% "Lockpath" ~ "Lockpath (excl. from Total)",
+                                      TRUE ~ reporting_region)) %>% 
+  group_by(reporting_region, Product) %>% 
+  summarize(
+    cases_opened = n()
+  ) %>% 
+  bind_rows(
+    support_cases_pre %>% 
+      filter(opened_date %within% (from_date %--% to_date),
+             !Product %in% "Lockpath") %>%
+      mutate(reporting_region = "Total") %>% 
+      group_by(reporting_region, Product) %>% 
+      summarize(
+        cases_opened = n()
+      )
+  ) %>% 
+  left_join(
+    support_cases_c_pre %>% 
+      filter(close_date %within% (from_date %--% to_date)) %>%
+      mutate(reporting_region = case_when(Product %in% "Lockpath" ~ "Lockpath (excl. from Total)",
+                                      TRUE ~ reporting_region)) %>% 
+      group_by(reporting_region, Product) %>% 
+      summarize(
+        cases_closed = n()
+    ) %>%
+      bind_rows(
+        support_cases_c_pre %>% 
+          filter(close_date %within% (from_date %--% to_date),
+                 !Product %in% "Lockpath") %>% 
+          mutate(reporting_region="Total") %>%
+          group_by(reporting_region, Product) %>% 
+          summarize(
+            cases_closed = n()
+          ) 
+      ), by=c("reporting_region", "Product")) %>% 
+  bind_rows(
+    bind_cols(
+      support_cases_o_pre %>%
+        filter(opened_date %within% (from_date %--% to_date),
+               !Product %in% "Lockpath") %>% 
+        mutate(Product = "Grand Total",
+               reporting_region = "Grand Total") %>% 
+        group_by(reporting_region, Product) %>%
+        summarize(
+          cases_opened = n()
+      )
+  ),
+  support_cases_c_pre %>%
+      filter(close_date %within% (from_date %--% to_date),
+             !Product %in% "Lockpath") %>% 
+      mutate(Product = "Grand Total",
+             reporting_region = "Grand Total") %>% 
+      group_by(reporting_region, Product) %>%
+      summarize(
+        cases_closed = n()
+    )
+  )
+
+cases_opened_india <- support_cases_pre %>% 
+  filter(opened_date %within% (from_date %--% to_date),
+         grepl("India", location)) %>%
+  group_by(Product) %>% 
+  summarize(
+    cases_opened = n()
+  )
+
+
+cases_backlog_pre <- cases_backlog %>% 
+  rename(
+    product_team = Client_Care_Team__c,
     opened_date = CreatedDate,
     type = Record_Type__c,
     skill = Skill__c,
@@ -1325,51 +1559,43 @@ cases_pre <- cases %>%
     owner_name = Owner__r.Name,
     case_age = Age_Days__c
   ) %>% 
-     mutate(Month = floor_date(close_date, unit="month"),
+     mutate(Month = floor_date(opened_date, unit="month"),
             Product = case_when(
-              type == "Customer Support Requests" & grepl("EthicsPoint|Telephony", product_team) ~ "EthicsPoint",
-              type == "Customer Support Requests" & grepl("PolicyTech", product_team) ~ "PolicyTech",
-              type == "Customer Support Requests" & grepl(" Training", product_team)~ "NAVEXEngage",
-              type == "Customer Support Requests" & grepl("RiskRate", product_team) ~ "RiskRate",
-              type == "Customer Support Requests" & grepl("Disclosures", product_team) ~ "Disclosures",
-              type == "Customer Support Requests" & grepl("WhistleB", product_team) ~ "WhistleB",
-              type == "Customer Support Requests" & grepl("ESG", product_team) ~ "ESG",
-              type == "Customer Support Requests" & product_team == TRUE ~ "Other",
-              type == "Discontinued Client" ~ "Discontinuation")
+              grepl("EthicsPoint|Telephony", product_team) ~ "EthicsPoint",
+              grepl("PolicyTech", product_team) ~ "PolicyTech",
+              grepl(" Training", product_team)~ "NAVEXEngage",
+              grepl("RiskRate", product_team) ~ "RiskRate",
+              grepl("Disclosures", product_team) ~ "Disclosures",
+              grepl("WhistleB", product_team) ~ "WhistleB",
+              grepl("ESG", product_team) ~ "ESG",
+              grepl("Lockpath|IRM", product_team) ~ "Lockpath",
+              product_team == TRUE ~ "Other"
+              )
      )
 
-cases_opened <- cases_pre %>% 
-  filter(between(opened_date, as.Date(from_date), as.Date(to_date))) %>% 
-  group_by(reporting_region, Product) %>% 
+cases_backlog_2d <- cases_backlog_pre %>% 
+  filter(case_age >= 2) %>% 
+  group_by(Product) %>% 
   summarize(
-    cases_opened = n()
-  ) %>% 
-  bind_rows(
-    cases_pre %>% 
-      filter(between(opened_date, as.Date(from_date), as.Date(to_date))) %>%
-      mutate(reporting_region = "Total") %>% 
-      group_by(reporting_region, Product) %>% 
-      summarize(
-        cases_opened = n()
-      )
-  ) %>% 
-  bind_cols(
-    cases_pre %>% 
-      filter(between(close_date, as.Date(from_date), as.Date(to_date))) %>% 
-      group_by(reporting_region, Product) %>% 
-      summarize(
-        cases_closed = n()
-    ) %>%
-      bind_rows(
-        cases_pre %>% 
-          filter(between(close_date, as.Date(from_date), as.Date(to_date))) %>% 
-          mutate(reporting_region="Total") %>%
-          group_by(reporting_region, Product) %>% 
-          summarize(
-            cases_closed = n()
-          ) 
-      ) %>% select(cases_closed) 
-  )
+    count = n(),
+    `% Total` = round(count/count(cases_backlog_pre %>% filter(case_age >= 2))*100, 2)$n
+  ) %>% arrange(desc(count))
+  
+cases_backlog_10d <- cases_backlog_pre %>% 
+  filter(case_age >= 10) %>% 
+  group_by(Product) %>% 
+  summarize(
+    count = n(),
+    `% Total` = round(count/count(cases_backlog_pre %>% filter(case_age >= 10))*100, 2)$n
+  ) %>% arrange(desc(count))
+  
+cases_backlog_30d <- cases_backlog_pre %>% 
+  filter(case_age >= 30) %>% 
+  group_by(Product) %>% 
+  summarize(
+    count = n(),
+    `% Total` = round(count/count(cases_backlog_pre %>% filter(case_age >= 30))*100, 2)$n
+  ) %>% arrange(desc(count))
   
 ```
 
@@ -1604,7 +1830,7 @@ utilization <- tibble(
 ```
 
 ```{r test_sample_queries}
-testq <- sf_query("SELECT Name, pse__Monday_Hours__c, pse__Tuesday_Hours__c, pse__Wednesday_Hours__c, pse__Thursday_Hours__c, pse__Friday_Hours__c, pse__Week_Total_Hours__c FROM pse__Work_Calendar__c")
+testq <- sf_query("SELECT CommentBody__c,CreatedById,CreatedDate FROM Case_Comment__c WHERE Case__c = '500Hs000027KThQIAW'")
 testq2 <- sf_query("SELECT Id, pse__Region__r.Name, pse__Salesforce_User__r.Id, Name FROM Contact WHERE pse__Is_Resource__c = TRUE and pse__Is_Resource_Active__c = TRUE") 
 test_df <- testq2 %>% 
   inner_join(testq, by = join_by(pse__Salesforce_User__r.Id == Id)) %>% 
