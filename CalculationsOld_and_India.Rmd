@@ -161,7 +161,7 @@ surveys_query <- paste("SELECT
         OR PS_Comp_q3__c != null)")
 
 proj_hours_sold_query <- paste0("SELECT
-        Milestone_ID_18__c,
+        Id,
         Name,
         Product__r.GL_Group__c,
         Product__r.Family,
@@ -171,6 +171,7 @@ proj_hours_sold_query <- paste0("SELECT
         Milestone_PM__r.pse__Group__r.Name,
         Milestone_PM__r.pse__Region__r.Name,
         Milestone_PM_s_Manager__r.Name,
+        pse__Project__r.pse__Group__r.Name,
         Account__r.Reporting_Region__c,
         Opportunity__r.CloseDate,
         CreatedDate
@@ -205,22 +206,25 @@ proj_hours_sold_query <- paste0("SELECT
         AND pse__Project__r.pse__Is_Template__c = FALSE
         AND ((pse__Project__r.pse__Opportunity__r.CloseDate >= ", ymd(from_date) %m+% months(-2), "
           AND pse__Project__r.pse__Opportunity__r.CloseDate <= ", to_date , ")
-        OR (CreatedDate >= ", ymd(from_date) %m+% months(-2), "T00:00:00Z 
-          AND CreatedDate <= ", to_date, "T23:59:59Z 
+        OR (CreatedDate >= ", ymd(from_date) %m+% months(-2), "T00:00:00.000Z 
+          AND CreatedDate <= ", to_date, "T23:59:59.999Z 
           AND Name LIKE '%Course Swap%'))")
 
 proj_hours_complete_query <- paste("SELECT
-        Milestone_ID_18__c,
+        Id,
         Name,
         Product__r.GL_Group__c,
         Product__r.Family,
         pse__Status__c,
         Total_Planned_Hours__c,
+        Under_Planned_Hours_Last_Month__c,
         Planned_vs_Client_Billable_Hours__c,
+        Planned_vs_Billable_Hours_Last_Month__c,
         Milestone_PM__r.Name,
         Milestone_PM__r.pse__Group__r.Name,
         Milestone_PM__r.pse__Region__r.Name,
         Milestone_PM_s_Manager__r.Name,
+        pse__Project__r.pse__Group__r.Name,
         Account__r.Reporting_Region__c,
         Account__r.Account_Owner_Region_CSO_Reporting__c,
         Actual_Go_Live__c
@@ -228,7 +232,7 @@ proj_hours_complete_query <- paste("SELECT
         pse__Milestone__c
       WHERE
         Account__r.Test_Account__c = FALSE
-        AND pse__Status__c = 'Complete'
+        AND pse__Status__c != 'Terminated'
         AND Actual_Go_Live__c >= ", from_date, "
         AND Actual_Go_Live__c <= ", to_date , "
         AND (Planned_vs_Billable_Hours_Last_Month__c > 0
@@ -257,10 +261,11 @@ proj_hours_complete_query <- paste("SELECT
           'Other Services',
           'Required Setup',
           'Professional Services')
-        AND pse__Project__r.pse__Is_Template__c = FALSE")
+        AND pse__Project__r.pse__Is_Template__c = FALSE
+        AND pse__Project__r.pse__Group__r.Name IN ('Implementation', 'Professional Services')")
 
 proj_hours_overages_query <- paste("SELECT
-        Milestone_ID_18__c,
+        Id,
         Name,
         Product__r.GL_Group__c,
         Product__r.Family,
@@ -270,6 +275,7 @@ proj_hours_overages_query <- paste("SELECT
         Planned_Hours_Overages_Last_Month__c,
         Milestone_PM__r.Name,
         Milestone_PM__r.pse__Group__r.Name,
+        pse__Project__r.pse__Group__r.Name,
         Milestone_PM__r.pse__Region__r.Name,
         Milestone_PM_s_Manager__r.Name,
         Account__r.Reporting_Region__c,
@@ -308,7 +314,7 @@ proj_hours_overages_query <- paste("SELECT
         AND pse__Project__r.pse__Group__r.Name IN ('Implementation', 'Professional Services')")
 
 proj_hours_backlog_query <- paste("SELECT
-        Milestone_ID_18__c,
+        Id,
         Name,
         Product__r.GL_Group__c,
         Product__r.Family,
@@ -320,6 +326,7 @@ proj_hours_backlog_query <- paste("SELECT
         Milestone_PM__r.pse__Group__r.Name,
         Milestone_PM__r.pse__Region__r.Name,
         Milestone_PM_s_Manager__r.Name,
+        pse__Project__r.pse__Group__r.Name,
         Account__r.Reporting_Region__c,
         Account__r.Account_Owner_Region_CSO_Reporting__c,
         Actual_Go_Live__c
@@ -361,7 +368,7 @@ proj_hours_backlog_query <- paste("SELECT
         AND pse__Project__r.pse__Group__r.Name IN ('Implementation', 'Professional Services')")
 
 on_time_completion_query <- paste("SELECT
-        Milestone_ID_18__c,
+        Id,
         Name,
         pse__Project__r.pse__Group__r.Name,
         Product__r.Family,
@@ -1112,8 +1119,9 @@ csat_irm <- surveys_pre %>%
 ```{r project_hours}
 proj_hours_sold_pre <- proj_hours_sold %>%
   rename(
-      milestone_id = Milestone_ID_18__c,
+      milestone_id = Id,
       milestone_name = Name,
+      # group = pse__Project__r.pse__Group__r.Name,
       product_gl_group = Product__r.GL_Group__c,
       product_family = Product__r.Family,
       milestone_status = pse__Status__c,
@@ -1179,8 +1187,9 @@ proj_hours_sold_india <- proj_hours_sold_pre %>%
 
 proj_hours_complete_pre <- proj_hours_complete %>% 
   rename(
-      milestone_id = Milestone_ID_18__c,
+      milestone_id = Id,
       milestone_name = Name,
+      # group = pse__Project__r.pse__Group__r.Name,
       product_gl_group = Product__r.GL_Group__c,
       product_family = Product__r.Family,
       milestone_status = pse__Status__c,
@@ -1239,8 +1248,9 @@ proj_hours_complete_india <- proj_hours_complete_pre %>%
 
 proj_hours_overages_pre <- proj_hours_overages %>% 
   rename(
-      milestone_id = Milestone_ID_18__c,
+      milestone_id = Id,
       milestone_name = Name,
+      # group = pse__Project__r.pse__Group__r.Name,
       product_gl_group = Product__r.GL_Group__c,
       product_family = Product__r.Family,
       milestone_status = pse__Status__c,
@@ -1285,8 +1295,9 @@ proj_hours_overages_india <- proj_hours_overages_pre %>%
 
 proj_hours_backlog_pre <- proj_hours_backlog %>% 
   rename(
-      milestone_id = Milestone_ID_18__c,
+      milestone_id = Id,
       milestone_name = Name,
+      # group = pse__Project__r.pse__Group__r.Name,
       product_gl_group = Product__r.GL_Group__c,
       product_family = Product__r.Family,
       milestone_status = pse__Status__c,
@@ -1377,7 +1388,7 @@ proj_hours_backlog_pipeline_india <- proj_hours_backlog_pre %>%
 
 on_time_completion_pre <- on_time_completion %>% 
   rename(
-      milestone_id = Milestone_ID_18__c,
+      milestone_id = Id,
       milestone_name = Name,
       group = pse__Project__r.pse__Group__r.Name,
       product_family = Product__r.Family,
@@ -1488,7 +1499,7 @@ cases_opened <- support_cases_o_pre %>%
     cases_opened = n()
   ) %>% 
   bind_rows(
-    support_cases_pre %>% 
+    support_cases_o_pre %>% 
       filter(opened_date %within% (from_date %--% to_date),
              !Product %in% "Lockpath") %>%
       mutate(reporting_region = "Total") %>% 
@@ -1539,7 +1550,7 @@ cases_opened <- support_cases_o_pre %>%
     )
   )
 
-cases_opened_india <- support_cases_pre %>% 
+cases_opened_india <- support_cases_o_pre %>% 
   filter(opened_date %within% (from_date %--% to_date),
          grepl("India", location)) %>%
   group_by(Product) %>% 
