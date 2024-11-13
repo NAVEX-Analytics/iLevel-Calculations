@@ -367,6 +367,15 @@ milestones <- milestones %>%
          `Last Month Hours` = Planned_vs_Billable_Hours_Last_Month__c + Under_Planned_Hours_Last_Month__c,
          `Delivery Efficiency` = na_if(Total_Planned_Hours__c / Total_Approved_Hours__c, Inf))
 
+ds_work_tasks <- ds_work_tasks %>% 
+  mutate(Team = case_when(Related_Case__r.DS_Resource_Team__c == "Client Interface" | 
+                                (Related_Case__r.DS_Resource_Team__c=="Telecom" & 
+                                   Related_PSA_Resource__r.pse__Group__r.Name == "Customer Interface")  ~ "Web Services",
+                               Related_Case__r.DS_Resource_Team__c=="Technical Specialist" ~ "Technical Specialists",
+                               Related_Case__r.DS_Resource_Team__c=="Telecom" & 
+                                 Related_PSA_Resource__r.pse__Group__r.Name != "Customer Interface" ~ "Telecom",
+                              TRUE ~ NA))
+
 csr_cases <- cases %>% 
   mutate(Product = Client_Care_Team__c,
          Product =  case_when(Product %in% c("EthicsPoint", "EU EthicsPoint", "Telephony Support") ~ "EthicsPoint", 
@@ -422,6 +431,14 @@ utilization_details <- utilization_details %>%
                           Product %in% c("Customer Success - Operations") ~ "Customer Success Operations",
                           Product %in% c("Migration Services - MS") ~ "Migration Scheduling",
                           TRUE ~ "Other"))
+
+utilization_details_cs_prod <- utilization_details %>% 
+  filter(Product=="Customer Support") %>% 
+  left_join(timecards %>% 
+              group_by(pse__Resource__r.Full_Name__c) %>% 
+              reframe(pto_hours = sum(pse__Total_Hours__c)),
+            by=c("pse__Resource__r.Name" = "pse__Resource__r.Full_Name__c")) %>% 
+  mutate(`Net Calendar Hours` = pse__Historical_Calendar_Hours__c - coalesce(pto_hours, 0))
  
 ```
 
@@ -446,9 +463,11 @@ create_metrics <- function(df, categories, .fn, .filters = TRUE, ..., .groups = 
     
     .group_names <- df %>% group_vars()
     
-    group_comb <- map(1:length({{ .group_names }}), ~ combn({{ .group_names }}, ., simplify = FALSE)) %>% list_c()
+    group_combn <- map(1:length({{ .group_names }}), 
+                      ~ combn({{ .group_names }}, ., simplify = FALSE)
+                      ) %>% list_c()
     
-    subtotal_data <- purrr::map(group_comb, function(g) {
+    subtotal_data <- purrr::map(group_combn, function(g) {
       subtotal_result <- df %>%
                group_by(across({{ g }})) %>%
                reframe(across(c(...), .fn, .names = "{.fn} of {.col}"))
@@ -580,16 +599,16 @@ at_risk_issues_opened_region <- create_metrics(issues,
                                                c(`Issues Opened` = Id))
 
 at_risk_issues_opened_irm <- create_metrics(issues, 
-                                               categories = c(Group = "At Risk Customers", 
-                                                              Metric = "Issues Opened",
-                                                              Region = "IRM"),
-                                               .fn = list(count = n_distinct), 
-                                               .filter = Date_Reported__c >= from_date &
-                                                 Date_Reported__c <= to_date &
-                                                 Issue_Type__c %in% c("Red", "Yellow") &
-                                                 Product_Family__c %in% c("Lockpath", "IRM"), 
-                                               .groups = c(Risk = Issue_Type__c),
-                                               c(`Issues Opened` = Id))
+                                             categories = c(Group = "At Risk Customers", 
+                                                            Metric = "Issues Opened",
+                                                            Region = "IRM"),
+                                             .fn = list(count = n_distinct), 
+                                             .filter = Date_Reported__c >= from_date &
+                                               Date_Reported__c <= to_date &
+                                               Issue_Type__c %in% c("Red", "Yellow") &
+                                               Product_Family__c %in% c("Lockpath", "IRM"), 
+                                             .groups = c(Risk = Issue_Type__c),
+                                             c(`Issues Opened` = Id))
 
 at_risk_issues_opened_location <- create_metrics(issues, 
                                                  categories = c(Group = "At Risk Customers", 
@@ -618,28 +637,28 @@ at_risk_issues_closed_region <- create_metrics(issues,
                                                c(`Issues Closed` = Id))
 
 at_risk_issues_closed_irm <- create_metrics(issues, 
-                                               categories = c(Group = "At Risk Customers", 
-                                                              Metric = "Issues Opened",
-                                                              Region = "IRM"),
-                                               .fn = list(count = n_distinct), 
-                                               .filter = Date_Closed__c >= from_date &
-                                                 Date_Closed__c <= to_date &
-                                                 Issue_Type__c %in% c("Red", "Yellow") &
-                                                 Product_Family__c %in% c("Lockpath", "IRM"), 
-                                               .groups = c(Risk = Issue_Type__c),
-                                               c(`Issues Closed` = Id))
+                                             categories = c(Group = "At Risk Customers", 
+                                                            Metric = "Issues Opened",
+                                                            Region = "IRM"),
+                                             .fn = list(count = n_distinct), 
+                                             .filter = Date_Closed__c >= from_date &
+                                               Date_Closed__c <= to_date &
+                                               Issue_Type__c %in% c("Red", "Yellow") &
+                                               Product_Family__c %in% c("Lockpath", "IRM"), 
+                                             .groups = c(Risk = Issue_Type__c),
+                                             c(`Issues Closed` = Id))
 
 at_risk_issues_closed_location <- create_metrics(issues, 
-                                               categories = c(Group = "At Risk Customers", 
-                                                              Metric = "Issues Opened"),
-                                               .fn = list(count = n_distinct), 
-                                               .filter = Date_Closed__c >= from_date &
-                                                 Date_Closed__c <= to_date &
-                                                 Issue_Type__c %in% c("Red", "Yellow") &
-                                                 !Product_Family__c %in% c("Lockpath", "IRM"), 
-                                               .groups = c(Location = Issue_Owner__r.Location__c,
-                                                         Risk = Issue_Type__c),
-                                               c(`Issues Closed` = Id))
+                                                 categories = c(Group = "At Risk Customers", 
+                                                                Metric = "Issues Opened"),
+                                                 .fn = list(count = n_distinct), 
+                                                 .filter = Date_Closed__c >= from_date &
+                                                   Date_Closed__c <= to_date &
+                                                   Issue_Type__c %in% c("Red", "Yellow") &
+                                                   !Product_Family__c %in% c("Lockpath", "IRM"), 
+                                                 .groups = c(Location = Issue_Owner__r.Location__c,
+                                                           Risk = Issue_Type__c),
+                                                 c(`Issues Closed` = Id))
 
 # Qualified Leads Booked ----
 
@@ -682,18 +701,18 @@ customer_satisfaction_region <- create_metrics(surveys,
                                                  Q4_Product_Satisfaction__c))
 
 customer_satisfaction_irm <- create_metrics(surveys,
-                                               categories = c(Group = "Customer Satisfaction",
-                                                              Metric = "Average Score",
-                                                              Region = "IRM"),
-                                               .fn = list(mean = mean),
-                                               .filter = Project_Primary_Product__c %in% c("Lockpath", "IRM"),
-                                               .groups = c(`AE Segment` = `AE Segment`,
-                                                           Survey = Delivery_Survey_Type__c, 
-                                                           `Record Type` = RecordType.Name),
-                                               c(PS_Comp_q3__c, 
-                                                 Imp_Comp_q3__c, 
-                                                 Q1_Technician_Assist__c, 
-                                                 Q4_Product_Satisfaction__c))
+                                             categories = c(Group = "Customer Satisfaction",
+                                                            Metric = "Average Score",
+                                                            Region = "IRM"),
+                                             .fn = list(mean = mean),
+                                             .filter = Project_Primary_Product__c %in% c("Lockpath", "IRM"),
+                                             .groups = c(`AE Segment` = `AE Segment`,
+                                                         Survey = Delivery_Survey_Type__c, 
+                                                         `Record Type` = RecordType.Name),
+                                             c(PS_Comp_q3__c, 
+                                               Imp_Comp_q3__c, 
+                                               Q1_Technician_Assist__c, 
+                                               Q4_Product_Satisfaction__c))
 
 customer_satisfaction_location <- create_metrics(surveys,
                                                  categories = c(Group = "Customer Satisfaction",
@@ -756,14 +775,14 @@ backlog_location <- create_metrics(milestones,
 
 ## New Project Hours ----
 new_project_hours_region <- create_metrics(milestones,
-                                             categories = c(Metric = "New Project Hours Sold",
-                                                            Group = "Implementation and Professional Services"),
-                                             .fn = list(sum = sum),
-                                             .filter = pse__Project__r.pse__Opportunity__r.CloseDate >= to_date |
-                                               (CreatedDate >= to_date & grepl("Course Swap", Name)),
-                                             .groups = c(Region = Account__r.Reporting_Region__c,
-                                                         Product = Product),
-                                             c(Total_Planned_Hours__c))
+                                           categories = c(Metric = "New Project Hours Sold",
+                                                          Group = "Implementation and Professional Services"),
+                                           .fn = list(sum = sum),
+                                           .filter = pse__Project__r.pse__Opportunity__r.CloseDate >= to_date |
+                                             (CreatedDate >= to_date & grepl("Course Swap", Name)),
+                                           .groups = c(Region = Account__r.Reporting_Region__c,
+                                                       Product = Product),
+                                           c(Total_Planned_Hours__c))
 
 new_project_hours_location <- create_metrics(milestones,
                                              categories = c(Metric = "New Project Hours Sold",
@@ -778,16 +797,16 @@ new_project_hours_location <- create_metrics(milestones,
 
 ## Planned Hours Completed ----
 planned_hours_completed_region <- create_metrics(milestones,
-                                                   categories = c(Metric = "Planned Hours Completed",
-                                                                  Group = "Implementation and Professional Services"),
-                                                   .fn = list(sum = sum),
-                                                   .filter = pse__Status__c!="Terminated" &
-                                                     Planned_vs_Billable_Hours_Last_Month__c > 0 &
-                                                     Under_Planned_Hours_Last_Month__c > 0 &
-                                                     Actual_Go_Live__c >= from_date,
-                                                   .groups = c(Region = Account__r.Reporting_Region__c,
-                                                               Product = Product),
-                                                   c(`Last Month Hours`))
+                                                 categories = c(Metric = "Planned Hours Completed",
+                                                                Group = "Implementation and Professional Services"),
+                                                 .fn = list(sum = sum),
+                                                 .filter = pse__Status__c!="Terminated" &
+                                                   Planned_vs_Billable_Hours_Last_Month__c > 0 &
+                                                   Under_Planned_Hours_Last_Month__c > 0 &
+                                                   Actual_Go_Live__c >= from_date,
+                                                 .groups = c(Region = Account__r.Reporting_Region__c,
+                                                             Product = Product),
+                                                 c(`Last Month Hours`))
 
 planned_hours_completed_location <- create_metrics(milestones,
                                                    categories = c(Metric = "Planned Hours Completed",
@@ -812,14 +831,14 @@ hour_overages_region <- create_metrics(milestones,
                                        c(Planned_vs_Billable_Hours_Last_Month__c))
 
 hour_overages_location <- create_metrics(milestones,
-                                       categories = c(Metric = "Hour Overages",
-                                                      Group = "Implementation and Professional Services"),
-                                       .fn = list(sum = sum),
-                                       .filter = pse__Status__c!="Complete" &
-                                                                  Planned_vs_Billable_Hours_Last_Month__c > 0,
-                                       .groups = c(Location = Milestone_PM__r.pse__Region__r.Name, 
-                                                   Product = Product),
-                                       c(Planned_vs_Billable_Hours_Last_Month__c))
+                                         categories = c(Metric = "Hour Overages",
+                                                        Group = "Implementation and Professional Services"),
+                                         .fn = list(sum = sum),
+                                         .filter = pse__Status__c!="Complete" &
+                                                                    Planned_vs_Billable_Hours_Last_Month__c > 0,
+                                         .groups = c(Location = Milestone_PM__r.pse__Region__r.Name, 
+                                                     Product = Product),
+                                         c(Planned_vs_Billable_Hours_Last_Month__c))
 
 ## Hour Overages for % Complete Milestones ----
 hour_overages_percent_completed_region <- create_metrics(milestones,
@@ -852,28 +871,28 @@ backlog_hours_region <- create_metrics(milestones,
                                                       Group = "Implementation and Professional Services"),
                                        .fn = list(sum = sum),
                                        .filter = pse__Status__c %in% c("Not Started",
-                                                                           "Active",
-                                                                           "Delayed Active",
-                                                                           "Pending Termination",
-                                                                           "Pipeline",
-                                                                           "Delayed On-Hold"),
+                                                                       "Active",
+                                                                       "Delayed Active",
+                                                                       "Pending Termination",
+                                                                       "Pipeline",
+                                                                       "Delayed On-Hold"),
                                        .groups = c(Region = Account__r.Reporting_Region__c, 
                                                    Product = Product),
                                        c(Planned_vs_Client_Billable_no_neg__c))
 
 backlog_hours_location <- create_metrics(milestones,
-                                       categories = c(Metric = "Backlog Hours",
-                                                      Group = "Implementation and Professional Services"),
-                                       .fn = list(sum = sum),
-                                       .filter = pse__Status__c %in% c("Not Started",
-                                                                           "Active",
-                                                                           "Delayed Active",
-                                                                           "Pending Termination",
-                                                                           "Pipeline",
-                                                                           "Delayed On-Hold"),
-                                       .groups = c(Location = Milestone_PM__r.pse__Region__r.Name, 
-                                                   Product = Product),
-                                       c(Planned_vs_Client_Billable_no_neg__c))
+                                         categories = c(Metric = "Backlog Hours",
+                                                        Group = "Implementation and Professional Services"),
+                                         .fn = list(sum = sum),
+                                         .filter = pse__Status__c %in% c("Not Started",
+                                                                             "Active",
+                                                                             "Delayed Active",
+                                                                             "Pending Termination",
+                                                                             "Pipeline",
+                                                                             "Delayed On-Hold"),
+                                         .groups = c(Location = Milestone_PM__r.pse__Region__r.Name, 
+                                                     Product = Product),
+                                         c(Planned_vs_Client_Billable_no_neg__c))
 
 ## Backlog Hours ----
 
@@ -957,36 +976,28 @@ delivery_efficiency_location <- create_metrics(milestones,
 
 # Web Services, Technical Specialists, and Data Services - Telecom ----
 
-ds_work_tasks <- ds_work_tasks %>% 
-  mutate(Team = case_when(Related_Case__r.DS_Resource_Team__c == "Client Interface" | 
-                                (Related_Case__r.DS_Resource_Team__c=="Telecom" & 
-                                   Related_PSA_Resource__r.pse__Group__r.Name == "Customer Interface")  ~ "Web Services",
-                               Related_Case__r.DS_Resource_Team__c=="Technical Specialist" ~ "Technical Specialists",
-                               Related_Case__r.DS_Resource_Team__c=="Telecom" & 
-                                 Related_PSA_Resource__r.pse__Group__r.Name != "Customer Interface" ~ "Telecom",
-                              TRUE ~ NA))
 
 ## Tasks Opened ----
 
 tasks_opened_region <- create_metrics(ds_work_tasks,
-                                 categories = c(Metric = "DS Work Tasks Opened",
-                                                Group = "Web Services, Technical Specialists, and Data Services - Telecom",
-                                                Region = "Core"),
-                                 .fn = list(n_distinct = n_distinct),
-                                 .filter = Date_Work_Task_Opened__c >= from_date & Date_Work_Task_Opened__c <= to_date,
-                                 .groups = c(Team = Team),
-                                 c(Id))
+                                       categories = c(Metric = "DS Work Tasks Opened",
+                                                      Group = "Web Services, Technical Specialists, and Data Services - Telecom",
+                                                      Region = "Core"),
+                                       .fn = list(n_distinct = n_distinct),
+                                       .filter = Date_Work_Task_Opened__c >= from_date & Date_Work_Task_Opened__c <= to_date,
+                                       .groups = c(Team = Team),
+                                       c(Id))
 
 ## Tasks Closed ----
 
 tasks_closed_region <- create_metrics(ds_work_tasks,
-                                     categories = c(Metric = "DS Work Tasks Closed",
-                                                  Group = "Web Services, Technical Specialists, and Data Services - Telecom",
-                                                  Region = "Core"),
-                                         .fn = list(count = n_distinct),
-                                     .filter = Date_Work_Task_Complete__c >= from_date & Date_Work_Task_Complete__c <= to_date,
-                                     .groups = c(Team = Team),
-                                     c(`Completed Tasks` = Id))
+                                       categories = c(Metric = "DS Work Tasks Closed",
+                                                    Group = "Web Services, Technical Specialists, and Data Services - Telecom",
+                                                    Region = "Core"),
+                                           .fn = list(count = n_distinct),
+                                       .filter = Date_Work_Task_Complete__c >= from_date & Date_Work_Task_Complete__c <= to_date,
+                                       .groups = c(Team = Team),
+                                       c(`Completed Tasks` = Id))
 
 ## On-Time Completion ----
 
@@ -1010,12 +1021,12 @@ ds_on_time_completion_region <- ds_on_time_completion_region %>%
 ## Average Days to Complete ----
 
 average_days_to_complete_region <- create_metrics(ds_work_tasks,
-                                         categories = c(Metric = "Average Days to Complete",
-                                                        Region = "Core"),
-                                         .fn = list(mean = mean),
-                                         .filter = Date_Work_Task_Complete__c >= from_date & Date_Work_Task_Complete__c <= to_date & !is.na(Total_Time_Work_Task_Open__c),
-                                         .groups = c(Team),
-                                         c(Total_Time_Work_Task_Open__c))
+                                                   categories = c(Metric = "Average Days to Complete",
+                                                                  Region = "Core"),
+                                                   .fn = list(mean = mean),
+                                                   .filter = Date_Work_Task_Complete__c >= from_date & Date_Work_Task_Complete__c <= to_date & !is.na(Total_Time_Work_Task_Open__c),
+                                                   .groups = c(Team),
+                                                   c(Total_Time_Work_Task_Open__c))
 
 
 # Customer Support ----
@@ -1045,12 +1056,12 @@ opened_customer_support_cases_irm <- create_metrics(csr_cases,
                                                     c(`Opened Cases` = Id))
 
 opened_customer_support_cases_location <- create_metrics(csr_cases,
-                                                             categories = c(Metric = "Opened Customer Support Cases"),
-                                                                 .fn = list(count = n_distinct),
-                                                             .filter = CreatedDate >= from_date & CreatedDate <= to_date,
-                                                             .groups = c(Location = Owner__r.Location__c, 
-                                                                         Product = Product),
-                                                             c(`Opened Cases` = Id))
+                                                         categories = c(Metric = "Opened Customer Support Cases"),
+                                                             .fn = list(count = n_distinct),
+                                                         .filter = CreatedDate >= from_date & CreatedDate <= to_date,
+                                                         .groups = c(Location = Owner__r.Location__c, 
+                                                                     Product = Product),
+                                                         c(`Opened Cases` = Id))
 
 ## Closed Customer Support Cases ----
 
@@ -1065,39 +1076,39 @@ closed_customer_support_cases_region <- create_metrics(csr_cases,
                                                        c(`Closed Cases` = Id))
 
 closed_customer_support_cases_irm <- create_metrics(csr_cases,
-                                                   categories = c(Metric = "Closed Customer Support Cases",
-                                                                  Group = "Customer Support",
-                                                                  Region = "IRM",
-                                                                  Product = "IRM"),
-                                                   .fn = list(count = n_distinct),
-                                                   .filter = ClosedDate >= from_date & 
-                                                     ClosedDate <= to_date & 
-                                                     Product %in% c("Lockpath"),
-                                                   # .groups = NULL,
-                                                   c(`Closed Cases` = Id))
+                                                     categories = c(Metric = "Closed Customer Support Cases",
+                                                                    Group = "Customer Support",
+                                                                    Region = "IRM",
+                                                                    Product = "IRM"),
+                                                     .fn = list(count = n_distinct),
+                                                     .filter = ClosedDate >= from_date & 
+                                                       ClosedDate <= to_date & 
+                                                       Product %in% c("Lockpath"),
+                                                     # .groups = NULL,
+                                                     c(`Closed Cases` = Id))
 
 closed_customer_support_cases_location <- create_metrics(csr_cases,
-                                                       categories = c(Metric = "Closed Customer Support Cases",
-                                                                      Group = "Customer Support"),
-                                                       .fn = list(count = n_distinct),
-                                                       .filter = ClosedDate >= from_date & 
-                                                         ClosedDate <= to_date,
-                                                       .groups = c(Location = Owner__r.Location__c, 
-                                                                   Product = Product),
-                                                       c(`Closed Cases` = Id))
+                                                         categories = c(Metric = "Closed Customer Support Cases",
+                                                                        Group = "Customer Support"),
+                                                         .fn = list(count = n_distinct),
+                                                         .filter = ClosedDate >= from_date & 
+                                                           ClosedDate <= to_date,
+                                                         .groups = c(Location = Owner__r.Location__c, 
+                                                                     Product = Product),
+                                                         c(`Closed Cases` = Id))
 
 # Discontinuation Cases ----
 
 ## Opened Discontinuation Cases ----
 
 opened_discontinuation_cases_region <- create_metrics(dc_cases,
-                                                   categories = c(Metric = "Opened Discontinuation Cases",
-                                                                  Group = "Customer Support"),
-                                                       .fn = list(count = n_distinct),
-                                                   .filter = CreatedDate >= from_date & CreatedDate <= to_date,
-                                                   .groups = c(Region = Account.Reporting_Region__c, 
-                                                               Product = Product),
-                                                   c(`Opened Cases` = Id))
+                                                       categories = c(Metric = "Opened Discontinuation Cases",
+                                                                      Group = "Customer Support"),
+                                                           .fn = list(count = n_distinct),
+                                                       .filter = CreatedDate >= from_date & CreatedDate <= to_date,
+                                                       .groups = c(Region = Account.Reporting_Region__c, 
+                                                                   Product = Product),
+                                                       c(`Opened Cases` = Id))
 
 opened_discontinuation_cases_irm <- create_metrics(dc_cases,
                                                    categories = c(Metric = "Opened Discontinuation Cases",
@@ -1131,37 +1142,37 @@ closed_discontinuation_cases_region <- create_metrics(dc_cases,
                                                       c(`Opened Cases` = Id))
 
 closed_discontinuation_cases_irm <- create_metrics(dc_cases,
-                                                  categories = c(Metric = "Closed Discontinuation Cases",
-                                                                 Group = "Customer Support",
-                                                                 Region = "IRM",
-                                                                 Product = "IRM"),
-                                                  .fn = list(count = n_distinct),
-                                                  .filter = ClosedDate >= from_date & ClosedDate <= to_date & Product %in% c("IRM"),
-                                                  # .groups = NULL,
-                                                  c(`Opened Cases` = Id))
+                                                    categories = c(Metric = "Closed Discontinuation Cases",
+                                                                   Group = "Customer Support",
+                                                                   Region = "IRM",
+                                                                   Product = "IRM"),
+                                                    .fn = list(count = n_distinct),
+                                                    .filter = ClosedDate >= from_date & ClosedDate <= to_date & Product %in% c("IRM"),
+                                                    # .groups = NULL,
+                                                    c(`Opened Cases` = Id))
 
 closed_discontinuation_cases_location <- create_metrics(dc_cases,
-                                                      categories = c(Metric = "Closed Discontinuation Cases",
-                                                                     Group = "Customer Support"),
-                                                      .fn = list(count = n_distinct),
-                                                      .filter = ClosedDate >= from_date & ClosedDate <= to_date,
-                                                      .groups = c(Location = Owner__r.Location__c, 
-                                                                  Product = Product),
-                                                      c(`Opened Cases` = Id))
+                                                        categories = c(Metric = "Closed Discontinuation Cases",
+                                                                       Group = "Customer Support"),
+                                                        .fn = list(count = n_distinct),
+                                                        .filter = ClosedDate >= from_date & ClosedDate <= to_date,
+                                                        .groups = c(Location = Owner__r.Location__c, 
+                                                                    Product = Product),
+                                                        c(`Opened Cases` = Id))
 
 
 # Customer Support Backlog ----
 
 customer_support_backlog_region <- create_metrics(csr_cases,
-                                                          categories = c(Metric = "Customer Support Backlog",
-                                                                         Group = "Customer Support"),
-                                                          .fn = list(sum = sum),
-                                                          .filter = IsClosed==FALSE &
-                                                            Skill__c != "RiskRate - Renewals" & 
-                                                            Defect_Enhancement__c==FALSE,
-                                                          .groups = c(Region = Account.Reporting_Region__c, 
-                                                                      Product = Product),
-                                                          c(`Backlog (48 Hour)`, `Backlog (10 Day)`, `Backlog (30 Day)`))
+                                                  categories = c(Metric = "Customer Support Backlog",
+                                                                 Group = "Customer Support"),
+                                                  .fn = list(sum = sum),
+                                                  .filter = IsClosed==FALSE &
+                                                    Skill__c != "RiskRate - Renewals" & 
+                                                    Defect_Enhancement__c==FALSE,
+                                                  .groups = c(Region = Account.Reporting_Region__c, 
+                                                              Product = Product),
+                                                  c(`Backlog (48 Hour)`, `Backlog (10 Day)`, `Backlog (30 Day)`))
 
 
 customer_support_backlog_location <- create_metrics(csr_cases,
@@ -1178,19 +1189,6 @@ customer_support_backlog_location <- create_metrics(csr_cases,
 ## Initial Response Time (Hours) ----
 
 initial_response_time_region <- create_metrics(csr_cases,
-                                           categories = c(Metric = "Initial Response Time (Hours)",
-                                                          Group = "Customer Support"),
-                                           .fn = list(mean = mean),
-                                           .filter = !is.na(`Initial Response Hours`) & 
-                                             !Skill__c %in% c("RiskRate - Renewals") & 
-                                             !Account.Test_Account__c %in% c(TRUE) & 
-                                             CreatedDate >= from_date & 
-                                             CreatedDate <= to_date,
-                                           .groups = c(Region = Account.Reporting_Region__c, 
-                                                       Product = Product),
-                                           c(`Initial Response Hours`))
-
-initial_response_time_location <- create_metrics(csr_cases,
                                                categories = c(Metric = "Initial Response Time (Hours)",
                                                               Group = "Customer Support"),
                                                .fn = list(mean = mean),
@@ -1199,31 +1197,44 @@ initial_response_time_location <- create_metrics(csr_cases,
                                                  !Account.Test_Account__c %in% c(TRUE) & 
                                                  CreatedDate >= from_date & 
                                                  CreatedDate <= to_date,
-                                               .groups = c(Location = Owner__r.Location__c, 
+                                               .groups = c(Region = Account.Reporting_Region__c, 
                                                            Product = Product),
                                                c(`Initial Response Hours`))
+
+initial_response_time_location <- create_metrics(csr_cases,
+                                                 categories = c(Metric = "Initial Response Time (Hours)",
+                                                                Group = "Customer Support"),
+                                                 .fn = list(mean = mean),
+                                                 .filter = !is.na(`Initial Response Hours`) & 
+                                                   !Skill__c %in% c("RiskRate - Renewals") & 
+                                                   !Account.Test_Account__c %in% c(TRUE) & 
+                                                   CreatedDate >= from_date & 
+                                                   CreatedDate <= to_date,
+                                                 .groups = c(Location = Owner__r.Location__c, 
+                                                             Product = Product),
+                                                 c(`Initial Response Hours`))
 
 ## Average Time to Resolution (Hours) ----
 
 avg_time_to_resolution_region <- create_metrics(csr_cases,
-                                            categories = c(Metric = "Average Time to Resolution (Hours)",
-                                                           Group = "Customer Support"),
-                                           .fn = list(mean = mean),
-                                           .filter = !is.na(`Resolution Hours`) &
-                                             !Skill__c %in% "RiskRate - Renewals" &
-                                             !Account.Test_Account__c %in% c(TRUE) &
-                                             Defect_Enhancement__c==FALSE &
-                                             !Owner.Name %in% c("Sean Brady", 
-                                                                "Lisa Ohland", 
-                                                                "Adam Rollins",
-                                                                "Michael Clark", 
-                                                                "Eugene Hershey", 
-                                                                "Customer Support Projects") &
-                                             ClosedDate >= from_date & 
-                                             ClosedDate <= to_date,
-                                           .groups = c(Region = Account.Reporting_Region__c, 
-                                                       Product = Product),
-                                           c(`Resolution Hours`))
+                                                categories = c(Metric = "Average Time to Resolution (Hours)",
+                                                               Group = "Customer Support"),
+                                               .fn = list(mean = mean),
+                                               .filter = !is.na(`Resolution Hours`) &
+                                                 !Skill__c %in% "RiskRate - Renewals" &
+                                                 !Account.Test_Account__c %in% c(TRUE) &
+                                                 Defect_Enhancement__c==FALSE &
+                                                 !Owner.Name %in% c("Sean Brady", 
+                                                                    "Lisa Ohland", 
+                                                                    "Adam Rollins",
+                                                                    "Michael Clark", 
+                                                                    "Eugene Hershey", 
+                                                                    "Customer Support Projects") &
+                                                 ClosedDate >= from_date & 
+                                                 ClosedDate <= to_date,
+                                               .groups = c(Region = Account.Reporting_Region__c, 
+                                                           Product = Product),
+                                               c(`Resolution Hours`))
 
 avg_time_to_resolution_location <- create_metrics(csr_cases,
                                                   categories = c(Metric = "Average Time to Resolution (Hours)",
@@ -1263,28 +1274,19 @@ billable_utilization_region <- create_metrics(utilization_details,
          .keep = "unused")
 
 billable_utilization_irm <- create_metrics(utilization_details,
-                                          categories = c(Metric = "Customer Support Backlog",
-                                                         Group = "Customer Support",
-                                                         Region = "IRM",
-                                                         Product = "IRM"),
-                                          .fn = list(sum = sum),
-                                          .filter = pse__Resource__r.pse__Group__r.Name %in% c("Lockpath - PS", "Lockpath - CS", "Lockpath - IS"),
-                                          # .groups = NULL,
-                                          c(`Billable Hours` = pse__Historical_Billable_Hours__c, `Calendar Hours` = pse__Historical_Calendar_Hours__c)) %>% 
-  mutate(`% of Billable Utilization` = `sum of Billable Hours` / `sum of Calendar Hours`,
-         .keep = "unused")
+                                            categories = c(Metric = "Customer Support Backlog",
+                                                           Group = "Customer Support",
+                                                           Region = "IRM",
+                                                           Product = "IRM"),
+                                            .fn = list(sum = sum),
+                                            .filter = pse__Resource__r.pse__Group__r.Name %in% c("Lockpath - PS", "Lockpath - CS", "Lockpath - IS"),
+                                            # .groups = NULL,
+                                            c(`Billable Hours` = pse__Historical_Billable_Hours__c, `Calendar Hours` = pse__Historical_Calendar_Hours__c)) %>% 
+    mutate(`% of Billable Utilization` = `sum of Billable Hours` / `sum of Calendar Hours`,
+           .keep = "unused")
 
 
 ## Billable Utilization - CS Prod Metrics ----
-
-utilization_details_cs_prod <- utilization_details %>% 
-  filter(Product=="Customer Support") %>% 
-  left_join(timecards %>% 
-              group_by(pse__Resource__r.Full_Name__c) %>% 
-              reframe(pto_hours = sum(pse__Total_Hours__c)),
-            by=c("pse__Resource__r.Name" = "pse__Resource__r.Full_Name__c")) %>% 
-  mutate(`Net Calendar Hours` = pse__Historical_Calendar_Hours__c - coalesce(pto_hours, 0))
-
 
 billable_utilization_cs_prod_region <- create_metrics(utilization_details_cs_prod,
                                                       categories = c(Metric = "Customer Support Backlog",
@@ -1300,17 +1302,17 @@ billable_utilization_cs_prod_region <- create_metrics(utilization_details_cs_pro
            .keep = "unused")
 
 billable_utilization_cs_prod_irm <- create_metrics(utilization_details_cs_prod,
-                                                      categories = c(Metric = "Customer Support Backlog",
-                                                                     Group = "Customer Support",
-                                                                     Region = "IRM",
-                                                                     Product = "IRM"),
-                                                      .fn = list(sum = sum),
-                                                      .filter = pse__Resource__r.pse__Group__r.Name %in% c("Lockpath - PS", "Lockpath - CS", "Lockpath - IS"),
-                                                      # .groups = NULL,
-                                                      c(`Billable Hours` = pse__Historical_Billable_Hours__c, 
-                                                        `Net Calendar Hours` = `Net Calendar Hours`)) %>% 
-    mutate(`CS Prod % of Billable Utilization` = `sum of Billable Hours` / `sum of Net Calendar Hours`,
-           .keep = "unused")
+                                                    categories = c(Metric = "Customer Support Backlog",
+                                                                   Group = "Customer Support",
+                                                                   Region = "IRM",
+                                                                   Product = "IRM"),
+                                                    .fn = list(sum = sum),
+                                                    .filter = pse__Resource__r.pse__Group__r.Name %in% c("Lockpath - PS", "Lockpath - CS", "Lockpath - IS"),
+                                                    # .groups = NULL,
+                                                    c(`Billable Hours` = pse__Historical_Billable_Hours__c, 
+                                                      `Net Calendar Hours` = `Net Calendar Hours`)) %>% 
+  mutate(`CS Prod % of Billable Utilization` = `sum of Billable Hours` / `sum of Net Calendar Hours`,
+         .keep = "unused")
 
 
 # EMEA Specific Metrics ----
