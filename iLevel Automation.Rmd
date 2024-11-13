@@ -1297,7 +1297,6 @@ billable_utilization_cs_prod_region <- create_metrics(utilization_details_cs_pro
                                                                   Product = Product),
                                                       c(`Billable Hours` = pse__Historical_Billable_Hours__c, 
                                                         `Net Calendar Hours` = `Net Calendar Hours`)) %>% 
-
     mutate(`CS Prod % of Billable Utilization` = `sum of Billable Hours` / `sum of Net Calendar Hours`,
            .keep = "unused")
 
