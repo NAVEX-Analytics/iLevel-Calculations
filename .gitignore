@@ -1,2 +1,6 @@
 .httr-oauth-salesforcer
 .Rproj.user
+.RData
+.Rhistory
+
+archive/
