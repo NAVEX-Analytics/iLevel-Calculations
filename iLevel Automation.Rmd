@@ -991,11 +991,11 @@ on_time_completion_region <- create_metrics(milestones,
                                            .groups = c(Month = Month_Actual_Go_Live__c,
                                                        Region = Account__r.Reporting_Region__c, 
                                                        Product = Product),
-                                           c(Milestone_On_Time_TD__c, Calculated_Duration_days__c))
+                                           c(`On Time Completion` = Milestone_On_Time_TD__c, `Calculated Duration (Days)`  = Calculated_Duration_days__c))
 
 on_time_completion_location <- create_metrics(milestones,
                                          categories = c(Metric = "Completion and Implementation",
-                                                      Group = "Implementation and Professional Services"),
+                                                        Group = "Implementation and Professional Services"),
                                          .fn = list(mean = mean),
                                          .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
                                            Actual_Go_Live__c >= from_date &
@@ -1003,12 +1003,12 @@ on_time_completion_location <- create_metrics(milestones,
                                          .groups = c(Month = Month_Actual_Go_Live__c,
                                                      Location = Milestone_PM__r.pse__Region__r.Name, 
                                                      Product = Product),
-                                         c(Milestone_On_Time_TD__c, Calculated_Duration_days__c))
+                                         c(`On Time Completion` = Milestone_On_Time_TD__c, `Calculated Duration (Days)`  = Calculated_Duration_days__c))
 
 ## Delivery Efficiency ----
 delivery_efficiency_region <- create_metrics(milestones,
                                              categories = c(Metric = "Delivery Efficiency",
-                                                          Group = "Implementation and Professional Services"),
+                                                            Group = "Implementation and Professional Services"),
                                                  .fn = list(sum = ~ sum(.x, na.rm = TRUE)),
                                              .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
                                                 pse__Status__c=="Complete" &
@@ -1021,7 +1021,7 @@ delivery_efficiency_region <- create_metrics(milestones,
 
 delivery_efficiency_location <- create_metrics(milestones,
                                                categories = c(Metric = "Delivery Efficiency",
-                                                            Group = "Implementation and Professional Services"),
+                                                              Group = "Implementation and Professional Services"),
                                                    .fn = list(sum = ~ sum(.x, na.rm = TRUE)),
                                                .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
                                                   pse__Status__c=="Complete" &
@@ -1488,7 +1488,7 @@ billable_hours_region <- create_metrics(utilization_details,
 # Combine Metrics into sheets
 ```{r combined_metrics}
 
-prepare_output <- function(keep_cols = c(Group, Metric, Month, Region, Calculation, Value), ...){
+prepare_output <- function(keep_cols = c("Group", "Metric", "Region", "Calculation", "Value", "Month"), ...){
   
   bind_rows(...) %>%
     mutate(across(Month, ~ . %>% coalesce(floor_date(Sys.Date(), "months") %>% as.character()))) %>% 
@@ -1496,7 +1496,7 @@ prepare_output <- function(keep_cols = c(Group, Metric, Month, Region, Calculati
     unite(Subgroup, -{{ keep_cols }}, sep = " - ", remove = TRUE, na.rm = TRUE) %>% 
     group_by(Subgroup = Subgroup %>% coalesce("Grand Total"), .add = TRUE) %>% 
     pivot_wider(names_from = "Month", values_from = "Value") %>% 
-    relocate(Group, Subgroup, Metric, seq(as.Date(from_date), as.Date(to_date), by="months") %>% as.character(), "Month Total", "Grand Total")
+    relocate(seq(as.Date(from_date), as.Date(to_date), by="months") %>% as.character(), "Month Total", "Grand Total", .after = c("Group", "Subgroup", "Calculation"))
   
 }
 
