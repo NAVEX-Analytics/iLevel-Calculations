@@ -757,7 +757,7 @@ qualified_leads_booked_location <- create_metrics(opportunities %>%
 customer_satisfaction_region <- create_metrics(surveys,
                                                categories = c(Group = "Customer Satisfaction",
                                                               Metric = "Average Score"),
-                                               .fn = list(mean = mean),
+                                               .fn = list(average = mean),
                                                .filter = !Project_Primary_Product__c %in% c("Lockpath", "IRM") &
                                                  Survey_Completed__c >= from_date &
                                                  Survey_Completed__c <= to_date,
@@ -766,16 +766,16 @@ customer_satisfaction_region <- create_metrics(surveys,
                                                            `AE Segment` = `AE Segment`,
                                                            Survey = Delivery_Survey_Type__c, 
                                                            `Record Type` = RecordType.Name),
-                                               c(PS_Comp_q3__c, 
-                                                 Imp_Comp_q3__c, 
-                                                 Q1_Technician_Assist__c, 
-                                                 Q4_Product_Satisfaction__c))
+                                               c(`Professional Services CSAT` = PS_Comp_q3__c, 
+                                                 `Implementation CSAT` = Imp_Comp_q3__c, 
+                                                 `Customer Support CSAT` = Q1_Technician_Assist__c, 
+                                                 `Product Satisfaction Score` =Q4_Product_Satisfaction__c))
 
 customer_satisfaction_irm <- create_metrics(surveys,
                                              categories = c(Group = "Customer Satisfaction",
                                                             Metric = "Average Score",
                                                             Region = "IRM"),
-                                             .fn = list(mean = mean),
+                                             .fn = list(average = mean),
                                              .filter = Project_Primary_Product__c %in% c("Lockpath", "IRM") &
                                                Survey_Completed__c >= from_date &
                                                Survey_Completed__c <= to_date,
@@ -783,15 +783,15 @@ customer_satisfaction_irm <- create_metrics(surveys,
                                                          `AE Segment` = `AE Segment`,
                                                          Survey = Delivery_Survey_Type__c, 
                                                          `Record Type` = RecordType.Name),
-                                             c(PS_Comp_q3__c, 
-                                               Imp_Comp_q3__c, 
-                                               Q1_Technician_Assist__c, 
-                                               Q4_Product_Satisfaction__c))
+                                             c(`Professional Services CSAT` = PS_Comp_q3__c, 
+                                               `Implementation CSAT` = Imp_Comp_q3__c, 
+                                               `Customer Support CSAT` = Q1_Technician_Assist__c, 
+                                               `Product Satisfaction Score` =Q4_Product_Satisfaction__c))
 
 customer_satisfaction_location <- create_metrics(surveys,
                                                  categories = c(Group = "Customer Satisfaction",
                                                                 Metric = "Average Score"),
-                                                 .fn = list(mean = mean),
+                                                 .fn = list(average = mean),
                                                  .filter = !Project_Primary_Product__c %in% c("Lockpath", "IRM") &
                                                    Survey_Completed__c >= from_date &
                                                    Survey_Completed__c <= to_date,
@@ -800,31 +800,31 @@ customer_satisfaction_location <- create_metrics(surveys,
                                                              `AE Segment` = `AE Segment`,
                                                              Survey = Delivery_Survey_Type__c, 
                                                              `Record Type` = RecordType.Name),
-                                                 c(PS_Comp_q3__c, 
-                                                   Imp_Comp_q3__c, 
-                                                   Q1_Technician_Assist__c, 
-                                                   Q4_Product_Satisfaction__c))
+                                                 c(`Professional Services CSAT` = PS_Comp_q3__c, 
+                                                   `Implementation CSAT` = Imp_Comp_q3__c, 
+                                                   `Customer Support CSAT` = Q1_Technician_Assist__c, 
+                                                   `Product Satisfaction Score` =Q4_Product_Satisfaction__c))
 
 nps_region <- create_metrics(nps_surveys,
                              categories = c(Group = "NPS Score",
                                             Metric = "Average Score"),
-                             .fn = list(mean = mean),
+                             .fn = list(average = mean),
                              .filter = Survey_Completed__c >= from_date &
                                Survey_Completed__c <= to_date,
                              .groups = c(Month = Month_Survey_Completed__c,
                                          Region = Account__r.Reporting_Region__c),
-                             c(NPS_Score__c))
+                             c(`Net Promoter Score` = NPS_Score__c))
 
 nps_irm <- create_metrics(nps_surveys,
                           categories = c(Group = "NPS Score",
                                          Metric = "Average Score",
                                          Region = "IRM"),
-                          .fn = list(mean = mean),
+                          .fn = list(average = mean),
                           .filter = NPS_Product__c %in% c("Lockpath", "IRM") &
                              Survey_Completed__c >= from_date &
                              Survey_Completed__c <= to_date,
                           .groups = c(Month = Month_Survey_Completed__c),
-                          c(NPS_Score__c))
+                          c(`Net Promoter Score` = NPS_Score__c))
 
 
 # Professional Services, Implementation ----
@@ -913,7 +913,7 @@ hour_overages_region <- create_metrics(milestones_with_monthly_hours,
                                        .groups = c(Month = Month_Calculated_For__c,
                                                    Region = Account__r.Reporting_Region__c, 
                                                    Product = Product),
-                                       c(Submitted_against_Planned__c))
+                                       c(`Hour Overages` = Submitted_against_Planned__c))
 
 hour_overages_location <- create_metrics(milestones_with_monthly_hours,
                                          categories = c(Metric = "Hour Overages",
@@ -924,7 +924,7 @@ hour_overages_location <- create_metrics(milestones_with_monthly_hours,
                                          .groups = c(Month = Month_Calculated_For__c,
                                                      Location = Milestone_PM__r.pse__Region__r.Name, 
                                                      Product = Product),
-                                         c(Submitted_against_Planned__c))
+                                         c(`Hour Overages` = Submitted_against_Planned__c))
 
 ## Hour Overages for % Complete Milestones ----
 hour_overages_percent_completed_region <- create_metrics(milestones_with_monthly_hours,
@@ -936,7 +936,7 @@ hour_overages_percent_completed_region <- create_metrics(milestones_with_monthly
                                                            Contains_Percent_Complete_Revenue__c==TRUE,
                                                          .groups = c(Region = Account__r.Reporting_Region__c, 
                                                                      Product = Product),
-                                                         c(Submitted_against_Planned__c))
+                                                         c(`Hour Overages` = Submitted_against_Planned__c))
 
 
 hour_overages_percent_completed_location <- create_metrics(milestones_with_monthly_hours,
@@ -948,7 +948,7 @@ hour_overages_percent_completed_location <- create_metrics(milestones_with_month
                                                              Contains_Percent_Complete_Revenue__c==TRUE,
                                                            .groups = c(Location = Milestone_PM__r.pse__Region__r.Name, 
                                                                        Product = Product),
-                                                           c(Submitted_against_Planned__c))
+                                                           c(`Hour Overages` = Submitted_against_Planned__c))
 
 ## Backlog Hours ----
 backlog_hours_region <- create_metrics(milestones,
@@ -1505,6 +1505,8 @@ prepare_output <- function(keep_cols = c("Group", "Metric", "Region", "Calculati
 region_data <- prepare_output(keep_cols = c(Month, Group, Metric, Region, Calculation, Value),
                               at_risk_arr_region,
                               at_risk_customers_region,
+                              at_risk_issues_opened_region,
+                              at_risk_issues_closed_region,
                               qualified_leads_booked_region,
                               customer_satisfaction_region,
                               nps_region,
@@ -1513,6 +1515,7 @@ region_data <- prepare_output(keep_cols = c(Month, Group, Metric, Region, Calcul
                               hour_overages_region,
                               hour_overages_percent_completed_region,
                               backlog_hours_region,
+                              backlog_region,
                               on_time_completion_region,
                               tasks_opened_region,
                               tasks_closed_region,
@@ -1541,6 +1544,8 @@ emea_apj_metrics <- region_data %>%
 irm_data <- prepare_output(keep_cols = c(Month, Group, Metric, Region, Calculation, Value),
                            at_risk_arr_irm,
                             at_risk_customers_irm,
+                            at_risk_issues_opened_irm,
+                            at_risk_issues_closed_irm,
                             # qualified_leads_booked_irm,
                             customer_satisfaction_irm,
                             nps_irm,
@@ -1568,27 +1573,30 @@ irm_metrics <- irm_data %>%
 
 location_data <- prepare_output(keep_cols = c(Month, Group, Metric, Location, Calculation, Value),
                                 at_risk_arr_location,
-                                 at_risk_customers_location,
-                                 qualified_leads_booked_location,
-                                 customer_satisfaction_location,
-                                 nps_region,
-                                 new_project_hours_location,
-                                 planned_hours_completed_location,
-                                 hour_overages_location,
-                                 hour_overages_percent_completed_location,
-                                 backlog_hours_location,
-                                 on_time_completion_location,
-                                 # tasks_opened_location,
-                                 # tasks_closed_location,
-                                 # ds_on_time_completion_location,
-                                 # average_days_to_complete_location,
-                                 opened_customer_support_cases_location,
-                                 closed_customer_support_cases_location,
-                                 initial_response_time_location,
-                                 avg_time_to_resolution_location,
-                                 # billable_utilization_location,
-                                 # billable_utilization_cs_prod_location
-                                 )
+                                at_risk_customers_location,
+                                at_risk_issues_opened_location,
+                                at_risk_issues_closed_location,
+                                qualified_leads_booked_location,
+                                customer_satisfaction_location,
+                                nps_region,
+                                new_project_hours_location,
+                                planned_hours_completed_location,
+                                hour_overages_location,
+                                hour_overages_percent_completed_location,
+                                backlog_hours_location,
+                                backlog_location,
+                                on_time_completion_location,
+                                # tasks_opened_location,
+                                # tasks_closed_location,
+                                # ds_on_time_completion_location,
+                                # average_days_to_complete_location,
+                                opened_customer_support_cases_location,
+                                closed_customer_support_cases_location,
+                                initial_response_time_location,
+                                avg_time_to_resolution_location,
+                                # billable_utilization_location,
+                                # billable_utilization_cs_prod_location
+                                )
 
 
 ## US Metrics ----
