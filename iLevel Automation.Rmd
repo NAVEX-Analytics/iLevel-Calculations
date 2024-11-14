@@ -401,7 +401,7 @@ milestones <- milestones %>%
          across(c(new_project_hours_date, pse__Project__r.pse__Opportunity__r.CloseDate, Actual_Go_Live__c, CreatedDate), ~ floor_date(., "months"), .names = "Month_{.col}"))
 
 milestones_with_monthly_hours <- milestones_monthly_hours %>% 
-  mutate(Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c)),
+  mutate(Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c)) %m+% months(1),
          Submitted_against_Planned__c = Planned_Hours__c - Submitted_Hours__c,
          Under_Planned_Hours__c = Planned_Hours__c - Submitted_Hours__c,
          `Planned Hours Completed` = Submitted_against_Planned__c + Under_Planned_Hours__c,
@@ -1495,7 +1495,8 @@ prepare_output <- function(keep_cols = c(Group, Metric, Month, Region, Calculati
     pivot_longer(cols = contains(" of "), names_to = "Calculation", values_to = "Value", values_drop_na = TRUE) %>%
     unite(Subgroup, -{{ keep_cols }}, sep = " - ", remove = TRUE, na.rm = TRUE) %>% 
     group_by(Subgroup = Subgroup %>% coalesce("Grand Total"), .add = TRUE) %>% 
-    pivot_wider(names_from = "Month", values_from = "Value")
+    pivot_wider(names_from = "Month", values_from = "Value") %>% 
+    relocate(Group, Subgroup, Metric, seq(as.Date(from_date), as.Date(to_date), by="months") %>% as.character(), "Month Total", "Grand Total")
   
 }
 
