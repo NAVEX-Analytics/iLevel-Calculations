@@ -559,7 +559,9 @@ create_metrics <- function(df, categories, .fn, .filters = TRUE, ..., .groups = 
 at_risk_arr_region <- create_metrics(issues,
                                      categories = c(Group = "At Risk Customers",
                                                     Metric = "ARR at Risk"),
-                                     .fn = list(sum = sum),
+                                     .fn = list(sum = ~ distinct(cur_data(), AccountName__c, ...) %>%
+                                                  pull(...) %>%
+                                                  sum(na.rm = TRUE)),
                                      .filter = Status__c %in% c("Unresolved",
                                                                 "Open - Unresolved",
                                                                 "Open - NPS") &
@@ -574,7 +576,9 @@ at_risk_arr_irm <- create_metrics(issues,
                                   categories = c(Group = "At Risk Customers",
                                                  Metric = "ARR at Risk",
                                                  Region = "IRM"),
-                                  .fn = list(sum = sum),
+                                  .fn = list(sum =  ~ distinct(cur_data(), AccountName__c, ...) %>%
+                                                  pull(...) %>%
+                                                  sum(na.rm = TRUE)),
                                   .filter = Status__c %in% c("Unresolved",
                                                             "Open - Unresolved",
                                                             "Open - NPS") &
@@ -588,7 +592,9 @@ at_risk_arr_location <- create_metrics(issues,
                                        categories = c(Group = "At Risk Customers",
                                                       Metric = "ARR at Risk"),
                                        
-                                       .fn = list(sum = sum),
+                                       .fn = list(sum =  ~ distinct(cur_data(), AccountName__c, ...) %>%
+                                                  pull(...) %>%
+                                                  sum(na.rm = TRUE)),
                                        .filter = Status__c %in% c("Unresolved",
                                                                  "Open - Unresolved",
                                                                  "Open - NPS") &
@@ -840,7 +846,7 @@ backlog_region <- create_metrics(milestones,
                                              Status = pse__Status__c, 
                                              Product = Product, 
                                              Region = Account__r.Reporting_Region__c),
-                                 c(Planned_vs_Client_Billable_no_neg__c))
+                                 c(`Backlog Hours by Status` = Planned_vs_Client_Billable_no_neg__c))
 
 backlog_location <- create_metrics(milestones,
                                    categories = c(Metric = "Status Hours"),
@@ -852,7 +858,7 @@ backlog_location <- create_metrics(milestones,
                                                Status = pse__Status__c, 
                                                Product = Product, 
                                                Location = Milestone_PM__r.pse__Region__r.Name),
-                                   c(Planned_vs_Client_Billable_no_neg__c))
+                                   c(`Backlog Hours by Status` = Planned_vs_Client_Billable_no_neg__c))
 
 ## New Project Hours ----
 new_project_hours_region <- create_metrics(milestones,
@@ -863,7 +869,7 @@ new_project_hours_region <- create_metrics(milestones,
                                            .groups = c(Month = Month_new_project_hours_date,
                                                        Region = Account__r.Reporting_Region__c,
                                                        Product = Product),
-                                           c(Total_Planned_Hours__c))
+                                           c(`New Project Hours Sold` = Total_Planned_Hours__c))
 
 new_project_hours_location <- create_metrics(milestones,
                                              categories = c(Metric = "New Project Hours Sold",
@@ -873,7 +879,7 @@ new_project_hours_location <- create_metrics(milestones,
                                              .groups = c(Month = Month_new_project_hours_date,
                                                          Location = Milestone_PM__r.pse__Region__r.Name,
                                                          Product = Product),
-                                             c(Total_Planned_Hours__c))
+                                             c(`New Project Hours Sold` = Total_Planned_Hours__c))
 
 ## Planned Hours Completed ----
 planned_hours_completed_region <- create_metrics(milestones_with_monthly_hours,
