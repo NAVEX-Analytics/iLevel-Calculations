@@ -940,7 +940,8 @@ hour_overages_percent_completed_region <- create_metrics(milestones_with_monthly
                                                          .filter = pse__Status__c!="Complete" &
                                                            Submitted_against_Planned__c > 0 &
                                                            Contains_Percent_Complete_Revenue__c==TRUE,
-                                                         .groups = c(Region = Account__r.Reporting_Region__c, 
+                                                         .groups = c(Month = Month_Calculated_For__c,
+                                                                     Region = Account__r.Reporting_Region__c, 
                                                                      Product = Product),
                                                          c(`Hour Overages` = Submitted_against_Planned__c))
 
@@ -952,7 +953,8 @@ hour_overages_percent_completed_location <- create_metrics(milestones_with_month
                                                            .filter = pse__Status__c!="Complete" &
                                                              Submitted_against_Planned__c > 0 &
                                                              Contains_Percent_Complete_Revenue__c==TRUE,
-                                                           .groups = c(Location = Milestone_PM__r.pse__Region__r.Name, 
+                                                           .groups = c(Month = Month_Calculated_For__c,
+                                                                       Location = Milestone_PM__r.pse__Region__r.Name, 
                                                                        Product = Product),
                                                            c(`Hour Overages` = Submitted_against_Planned__c))
 
