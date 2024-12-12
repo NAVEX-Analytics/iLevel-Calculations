@@ -391,7 +391,7 @@ milestones <- milestones %>%
          Group = case_when(Product__r.GL_Group__c %in% c("Other Services", "Required Setup") ~ "Implementation",
                            TRUE ~ Product__r.GL_Group__c),
          # `Last Month Hours` = Planned_vs_Billable_Hours_Last_Month__c + Under_Planned_Hours_Last_Month__c,
-         `Delivery Efficiency` = na_if(Total_Planned_Hours__c / Total_Approved_Hours__c, Inf),
+         # `Delivery Efficiency` = na_if(Total_Planned_Hours__c / Total_Approved_Hours__c, Inf),
          new_project_hours_date = case_when(pse__Project__r.pse__Opportunity__r.CloseDate >= from_date & 
                                               pse__Project__r.pse__Opportunity__r.CloseDate <= to_date ~ ymd(pse__Project__r.pse__Opportunity__r.CloseDate),
                                             CreatedDate >= from_date & 
@@ -1100,7 +1100,9 @@ delivery_efficiency_region <- create_metrics(milestones,
                                            .groups = c(Group = Group,
                                                        Month = Month_new_project_hours_date,
                                                        Region = Account__r.Reporting_Region__c),
-                                             c(`Delivery Efficiency`))
+                                             c(Total_Planned_Hours__c, Total_Approved_Hours__c, )) %>% 
+  mutate(`Delivery Efficiency` = `sum of Total_Planned_Hours__c` / `sum of Total_Approved_Hours__c`,
+         .keep = "unused")
 
 delivery_efficiency_location <- create_metrics(milestones,
                                                categories = c(Metric = "Delivery Efficiency",
@@ -1115,7 +1117,10 @@ delivery_efficiency_location <- create_metrics(milestones,
                                                .groups = c(Group = Group,
                                                            Month = Month_new_project_hours_date,
                                                            Location = Milestone_PM__r.pse__Region__r.Name),
-                                               c(`Delivery Efficiency`))
+                                             c(Total_Planned_Hours__c, Total_Approved_Hours__c, )) %>% 
+  mutate(`Delivery Efficiency` = `sum of Total_Planned_Hours__c` / `sum of Total_Approved_Hours__c`,
+         .keep = "unused")
+
 
 # Web Services, Technical Specialists, and Data Services - Telecom ----
 
