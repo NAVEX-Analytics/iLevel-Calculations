@@ -1098,10 +1098,11 @@ delivery_efficiency_region <- create_metrics(milestones,
                                              Group %in% c("Implementation", "Professional Services") & 
                                              Product %in% c("EthicsPoint", "PolicyTech", "NAVEXEngage", "RiskRate", "ESG", "Disclosure Manager", "WhistleB", "Other"),
                                            .groups = c(Group = Group,
-                                                       Month = Month_new_project_hours_date,
+                                                       Month = Month_Actual_Go_Live__c,
                                                        Region = Account__r.Reporting_Region__c),
-                                             c(Total_Planned_Hours__c, Total_Approved_Hours__c, )) %>% 
-  mutate(`Delivery Efficiency` = `sum of Total_Planned_Hours__c` / `sum of Total_Approved_Hours__c`,
+                                             c(Total_Planned_Hours__c, Total_Approved_Hours__c)) %>% 
+  mutate(`average of Delivery Efficiency` = (`sum of Total_Planned_Hours__c`) / (`sum of Total_Approved_Hours__c`),
+         across(`average of Delivery Efficiency`, ~ na_if(., Inf)),
          .keep = "unused")
 
 delivery_efficiency_location <- create_metrics(milestones,
@@ -1115,10 +1116,11 @@ delivery_efficiency_location <- create_metrics(milestones,
                                                  Group %in% c("Implementation", "Professional Services") & 
                                                  Product %in% c("EthicsPoint", "PolicyTech", "NAVEXEngage", "RiskRate", "ESG", "Disclosure Manager", "WhistleB", "Other"),
                                                .groups = c(Group = Group,
-                                                           Month = Month_new_project_hours_date,
+                                                           Month = Month_Actual_Go_Live__c,
                                                            Location = Milestone_PM__r.pse__Region__r.Name),
-                                             c(Total_Planned_Hours__c, Total_Approved_Hours__c, )) %>% 
-  mutate(`Delivery Efficiency` = `sum of Total_Planned_Hours__c` / `sum of Total_Approved_Hours__c`,
+                                             c(Total_Planned_Hours__c, Total_Approved_Hours__c)) %>% 
+  mutate(`average of Delivery Efficiency` = (`sum of Total_Planned_Hours__c`) / (`sum of Total_Approved_Hours__c`),
+         across(`average of Delivery Efficiency`, ~ na_if(., Inf)),
          .keep = "unused")
 
 
