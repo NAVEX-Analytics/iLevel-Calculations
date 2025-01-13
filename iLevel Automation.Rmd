@@ -3,8 +3,8 @@ title: "iLevel Calculations"
 author: "NAVEX, Inc."
 date: "`r Sys.Date()`"
 params:
-  from_date: "2024-01-01"
-  to_date: "2024-11-01"
+  from_date: "2024-12-01"
+  to_date: "2024-12-31"
   
 
 ---
@@ -387,6 +387,7 @@ milestones <- milestones %>%
                              Product %in% c("Incident Management") ~ "EthicsPoint",
                              Product %in% c("Disclosure Management") ~ "Disclosure Manager",
                              Product %in% c("Policy Management") ~ "PolicyTech",
+                             Product %in% c("WhistleB") ~ "WhistleB",
                              TRUE ~ "Other"),
          Group = case_when(Product__r.GL_Group__c %in% c("Other Services", "Required Setup") ~ "Implementation",
                            TRUE ~ Product__r.GL_Group__c),
@@ -794,7 +795,7 @@ customer_satisfaction_irm <- create_metrics(surveys,
                                                `Customer Support CSAT` = Q1_Technician_Assist__c, 
                                                `Product Satisfaction Score` =Q4_Product_Satisfaction__c))
 
-customer_satisfaction_location <- create_metrics(surveys,
+customer_satisfaction_location_imp_ps <- create_metrics(surveys,
                                                  categories = c(Group = "Customer Satisfaction",
                                                                 Metric = "Average Score"),
                                                  .fn = list(average = mean),
@@ -807,9 +808,21 @@ customer_satisfaction_location <- create_metrics(surveys,
                                                              Survey = Delivery_Survey_Type__c, 
                                                              `Record Type` = RecordType.Name),
                                                  c(`Professional Services CSAT` = PS_Comp_q3__c, 
-                                                   `Implementation CSAT` = Imp_Comp_q3__c, 
-                                                   `Customer Support CSAT` = Q1_Technician_Assist__c, 
-                                                   `Product Satisfaction Score` =Q4_Product_Satisfaction__c))
+                                                   `Implementation CSAT` = Imp_Comp_q3__c))
+
+customer_satisfaction_location_support <- create_metrics(surveys,
+                                                         categories = c(Group = "Customer Satisfaction",
+                                                                        Metric = "Average Score"),
+                                                         .fn = list(average = mean),
+                                                         .filter = Survey_Completed__c >= from_date &
+                                                           Survey_Completed__c <= to_date &
+                                                           !is.na(Case__r.Owner__r.Location__c),
+                                                         .groups = c(Month = Month_Survey_Completed__c,
+                                                                     Location = Case__r.Owner__r.Location__c,
+                                                                     `AE Segment` = `AE Segment`,
+                                                                     `Record Type` = RecordType.Name),
+                                                         c(`Customer Support CSAT` = Q1_Technician_Assist__c, 
+                                                         `Product Satisfaction Score` =Q4_Product_Satisfaction__c))
 
 nps_region <- create_metrics(nps_surveys,
                              categories = c(Group = "NPS Score",
@@ -862,183 +875,204 @@ backlog_location <- create_metrics(milestones,
 
 ## New Project Hours ----
 new_project_hours_region <- create_metrics(milestones,
-                                           categories = c(Metric = "New Project Hours Sold",
-                                                          Group = "Implementation and Professional Services"),
+                                           categories = c(Metric = "New Project Hours Sold"),
                                            .fn = list(sum = sum),
-                                           .filter = !is.na(new_project_hours_date),
-                                           .groups = c(Month = Month_new_project_hours_date,
+                                           .filter = !is.na(new_project_hours_date) &
+                                            Group %in% c("Implementation", "Professional Services"),
+                                           .groups = c(Group = Group,
+                                                       Month = Month_new_project_hours_date,
                                                        Region = Account__r.Reporting_Region__c,
                                                        Product = Product),
                                            c(`New Project Hours Sold` = Total_Planned_Hours__c))
 
 new_project_hours_location <- create_metrics(milestones,
-                                             categories = c(Metric = "New Project Hours Sold",
-                                                            Group = "Implementation and Professional Services"),
+                                             categories = c(Metric = "New Project Hours Sold"),
                                              .fn = list(sum = sum),
-                                             .filter = !is.na(new_project_hours_date),
-                                             .groups = c(Month = Month_new_project_hours_date,
+                                             .filter = !is.na(new_project_hours_date) &
+                                               Group %in% c("Implementation", "Professional Services"),
+                                             .groups = c(Group = Group,
+                                                         Month = Month_new_project_hours_date,
                                                          Location = Milestone_PM__r.pse__Region__r.Name,
                                                          Product = Product),
                                              c(`New Project Hours Sold` = Total_Planned_Hours__c))
 
 ## Planned Hours Completed ----
 planned_hours_completed_region <- create_metrics(milestones_with_monthly_hours,
-                                                 categories = c(Metric = "Planned Hours Completed",
-                                                                Group = "Implementation and Professional Services"),
+                                                 categories = c(Metric = "Planned Hours Completed"),
                                                  .fn = list(sum = sum),
                                                  .filter = pse__Status__c!="Terminated" &
                                                    Submitted_against_Planned__c > 0 &
                                                    Under_Planned_Hours__c > 0 &
                                                    Actual_Go_Live__c >= from_date &
-                                                   Actual_Go_Live__c <= to_date,
-                                                 .groups = c(Month = Month_Calculated_For__c,
+                                                   Actual_Go_Live__c <= to_date &
+                                                   Group %in% c("Implementation", "Professional Services"),
+                                                 .groups = c(Group = Group,
+                                                             Month = Month_Calculated_For__c,
                                                              Region = Account__r.Reporting_Region__c,
                                                              Product = Product),
                                                  c(`Planned Hours Completed`))
 
 planned_hours_completed_location <- create_metrics(milestones_with_monthly_hours,
-                                                   categories = c(Metric = "Planned Hours Completed",
-                                                                  Group = "Implementation and Professional Services"),
+                                                   categories = c(Metric = "Planned Hours Completed"),
                                                    .fn = list(sum = sum),
                                                    .filter = pse__Status__c!="Terminated" &
                                                      Submitted_against_Planned__c > 0 &
                                                      Under_Planned_Hours__c > 0 &
                                                      Actual_Go_Live__c >= from_date &
-                                                   Actual_Go_Live__c <= to_date,
-                                                   .groups = c(Month = Month_Calculated_For__c,
+                                                     Actual_Go_Live__c <= to_date &
+                                                     Group %in% c("Implementation", "Professional Services"),
+                                                   .groups = c(Group = Group,
+                                                               Month = Month_Calculated_For__c,
                                                                Location = Milestone_PM__r.pse__Region__r.Name,
                                                                Product = Product),
                                                    c(`Planned Hours Completed`))
 ## Hour Overages ----
 hour_overages_region <- create_metrics(milestones_with_monthly_hours,
-                                       categories = c(Metric = "Hour Overages",
-                                                      Group = "Implementation and Professional Services"),
+                                       categories = c(Metric = "Hour Overages"),
                                        .fn = list(sum = sum),
                                        .filter = pse__Status__c!="Complete" &
-                                         Submitted_against_Planned__c > 0,
-                                       .groups = c(Month = Month_Calculated_For__c,
+                                         Submitted_against_Planned__c > 0 &
+                                         Group %in% c("Implementation", "Professional Services"),
+                                       .groups = c(Group= Group,
+                                                   Month = Month_Calculated_For__c,
                                                    Region = Account__r.Reporting_Region__c, 
                                                    Product = Product),
                                        c(`Hour Overages` = Submitted_against_Planned__c))
 
 hour_overages_location <- create_metrics(milestones_with_monthly_hours,
-                                         categories = c(Metric = "Hour Overages",
-                                                        Group = "Implementation and Professional Services"),
+                                         categories = c(Metric = "Hour Overages"),,
                                          .fn = list(sum = sum),
                                          .filter = pse__Status__c!="Complete" &
-                                           Submitted_against_Planned__c > 0,
-                                         .groups = c(Month = Month_Calculated_For__c,
+                                           Submitted_against_Planned__c > 0 &
+                                           Group %in% c("Implementation", "Professional Services"),
+                                         .groups = c(Group = Group,
+                                                     Month = Month_Calculated_For__c,
                                                      Location = Milestone_PM__r.pse__Region__r.Name, 
                                                      Product = Product),
                                          c(`Hour Overages` = Submitted_against_Planned__c))
 
 ## Hour Overages for % Complete Milestones ----
 hour_overages_percent_completed_region <- create_metrics(milestones_with_monthly_hours,
-                                                         categories = c(Metric = "Hour Overages for % Complete Milestones",
-                                                                        Group = "Implementation and Professional Services"),
+                                                         categories = c(Metric = "Hour Overages for % Complete Milestones"),
                                                          .fn = list(sum = sum),
                                                          .filter = pse__Status__c!="Complete" &
                                                            Submitted_against_Planned__c > 0 &
-                                                           Contains_Percent_Complete_Revenue__c==TRUE,
-                                                         .groups = c(Month = Month_Calculated_For__c,
+                                                           Contains_Percent_Complete_Revenue__c==TRUE &
+                                                           Group %in% c("Implementation", "Professional Services"),
+                                                         .groups = c(Group = Group,
+                                                                     Month = Month_Calculated_For__c,
                                                                      Region = Account__r.Reporting_Region__c, 
                                                                      Product = Product),
                                                          c(`Hour Overages` = Submitted_against_Planned__c))
 
 
 hour_overages_percent_completed_location <- create_metrics(milestones_with_monthly_hours,
-                                                           categories = c(Metric = "Hour Overages for % Complete Milestones",
-                                                                          Group = "Implementation and Professional Services"),
+                                                           categories = c(Metric = "Hour Overages for % Complete Milestones"),
                                                            .fn = list(sum = sum),
                                                            .filter = pse__Status__c!="Complete" &
                                                              Submitted_against_Planned__c > 0 &
-                                                             Contains_Percent_Complete_Revenue__c==TRUE,
-                                                           .groups = c(Month = Month_Calculated_For__c,
+                                                             Contains_Percent_Complete_Revenue__c==TRUE &
+                                                             Group %in% c("Implementation", "Professional Services"),
+                                                           .groups = c(Group = Group,
+                                                                       Month = Month_Calculated_For__c,
                                                                        Location = Milestone_PM__r.pse__Region__r.Name, 
                                                                        Product = Product),
                                                            c(`Hour Overages` = Submitted_against_Planned__c))
 
 ## Backlog Hours ----
 backlog_hours_region <- create_metrics(milestones,
-                                       categories = c(Metric = "Backlog Hours",
-                                                      Group = "Implementation and Professional Services"),
+                                       categories = c(Metric = "Backlog Hours"),
                                        .fn = list(sum = sum),
                                        .filter = pse__Status__c %in% c("Not Started",
                                                                        "Active",
                                                                        "Delayed Active",
                                                                        "Pending Termination",
                                                                        "Pipeline",
-                                                                       "Delayed On-Hold"),
-                                       .groups = c(Region = Account__r.Reporting_Region__c, 
+                                                                       "Delayed On-Hold") &
+                                        Group %in% c("Implementation", "Professional Services"),
+                                       .groups = c(Group = Group,
+                                                   Region = Account__r.Reporting_Region__c, 
                                                    Product = Product),
                                        c(`Backlog Hours` = Planned_vs_Client_Billable_no_neg__c))
 
 backlog_hours_location <- create_metrics(milestones,
-                                         categories = c(Metric = "Backlog Hours",
-                                                        Group = "Implementation and Professional Services"),
+                                         categories = c(Metric = "Backlog Hours"),
                                          .fn = list(sum = sum),
                                          .filter = pse__Status__c %in% c("Not Started",
                                                                          "Active",
                                                                          "Delayed Active",
                                                                          "Pending Termination",
                                                                          "Pipeline",
-                                                                         "Delayed On-Hold"),
-                                         .groups = c(Location = Milestone_PM__r.pse__Region__r.Name, 
+                                                                         "Delayed On-Hold") &
+                                           Group %in% c("Implementation", "Professional Services"),
+                                         .groups = c(Group = Group,
+                                                     Location = Milestone_PM__r.pse__Region__r.Name, 
                                                      Product = Product),
                                          c(`Backlog Hours` = Planned_vs_Client_Billable_no_neg__c))
 
 
 ## On-Time Completion and Time to Implement (Days) ----
 on_time_completion_region <- create_metrics(milestones,
-                                            categories = c(Metric = "Completion and Implementation",
-                                                           Group = "Implementation and Professional Services"),
+                                            categories = c(Metric = "Completion and Implementation"),
                                            .fn = list(mean = mean),
                                            .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
                                              Actual_Go_Live__c >= from_date &
-                                             Actual_Go_Live__c <= to_date,
-                                           .groups = c(Month = Month_Actual_Go_Live__c,
-                                                       Region = Account__r.Reporting_Region__c, 
+                                             Actual_Go_Live__c <= to_date &
+                                             Group %in% c("Implementation", "Professional Services"),
+                                           .groups = c(Group = Group,
+                                                       Month = Month_Actual_Go_Live__c,
+                                                       Region = Account__r.Reporting_Region__c,
                                                        Product = Product),
                                            c(`On Time Completion` = Milestone_On_Time_TD__c, `Calculated Duration (Days)`  = Calculated_Duration_days__c))
 
 on_time_completion_location <- create_metrics(milestones,
-                                         categories = c(Metric = "Completion and Implementation",
-                                                        Group = "Implementation and Professional Services"),
+                                         categories = c(Metric = "Completion and Implementation"),
                                          .fn = list(mean = mean),
                                          .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
                                            Actual_Go_Live__c >= from_date &
-                                           Actual_Go_Live__c <= to_date,
-                                         .groups = c(Month = Month_Actual_Go_Live__c,
-                                                     Location = Milestone_PM__r.pse__Region__r.Name, 
+                                           Actual_Go_Live__c <= to_date &
+                                           Group %in% c("Implementation", "Professional Services"),
+                                         .groups = c(Group = Group,
+                                                     Month = Month_Actual_Go_Live__c,
+                                                     Location = Milestone_PM__r.pse__Region__r.Name,
+
                                                      Product = Product),
                                          c(`On Time Completion` = Milestone_On_Time_TD__c, `Calculated Duration (Days)`  = Calculated_Duration_days__c))
 
 ## Delivery Efficiency ----
 delivery_efficiency_region <- create_metrics(milestones,
-                                             categories = c(Metric = "Delivery Efficiency",
-                                                            Group = "Implementation and Professional Services"),
+                                             categories = c(Metric = "Delivery Efficiency"),
                                                  .fn = list(sum = ~ sum(.x, na.rm = TRUE)),
                                              .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
                                                 pse__Status__c=="Complete" &
                                                 Actual_Go_Live__c >= from_date &
-                                                Actual_Go_Live__c <= to_date,
+                                                Actual_Go_Live__c <= to_date &
+                                                Group %in% c("Implementation", "Professional Services"),
                                              .groups = c(Month = Month_Actual_Go_Live__c,
+                                                         Group = Group,
                                                          Region = Account__r.Reporting_Region__c, 
                                                          Product = Product),
-                                             c(`Delivery Efficiency`))
+                                             c(`Total Approved Hours` = Total_Approved_Hours__c, 
+                                               `Total Planned Hours` = Total_Planned_Hours__c)) %>% 
+  group_by(Metric, Month, Group, Region, Product) %>% 
+  reframe(`Delivery Efficiency` = mean(`sum of Total Planned Hours` / `sum of Total Approved Hours`))
 
 delivery_efficiency_location <- create_metrics(milestones,
-                                               categories = c(Metric = "Delivery Efficiency",
-                                                              Group = "Implementation and Professional Services"),
+                                               categories = c(Metric = "Delivery Efficiency"),
                                                    .fn = list(sum = ~ sum(.x, na.rm = TRUE)),
                                                .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
                                                   pse__Status__c=="Complete" &
                                                   Actual_Go_Live__c >= from_date &
-                                                  Actual_Go_Live__c <= to_date,
+                                                  Actual_Go_Live__c <= to_date &
+                                                  Group %in% c("Implementation", "Professional Services"),
                                                .groups = c(Month = Month_Actual_Go_Live__c,
+                                                           Group = Group,
                                                            Location = Milestone_PM__r.pse__Region__r.Name, 
                                                            Product = Product),
-                                               c(`Delivery Efficiency`))
+                                               c(`Total Approved Hours` = Total_Approved_Hours__c, 
+                                               `Total Planned Hours` = Total_Planned_Hours__c)) %>% 
+  group_by(Metric, Month, Group, Location, Product) %>% 
+  reframe(`Delivery Efficiency` = mean(`sum of Total Planned Hours` / `sum of Total Approved Hours`))
 
 # Web Services, Technical Specialists, and Data Services - Telecom ----
 
@@ -1531,6 +1565,7 @@ region_data <- prepare_output(keep_cols = c(Month, Group, Metric, Region, Calcul
                               average_days_to_complete_region,
                               opened_customer_support_cases_region,
                               closed_customer_support_cases_region,
+                              customer_support_backlog_region,
                               initial_response_time_region,
                               avg_time_to_resolution_region,
                               billable_utilization_region,
@@ -1585,7 +1620,8 @@ location_data <- prepare_output(keep_cols = c(Month, Group, Metric, Location, Ca
                                 at_risk_issues_opened_location,
                                 at_risk_issues_closed_location,
                                 qualified_leads_booked_location,
-                                customer_satisfaction_location,
+                                customer_satisfaction_location_imp_ps,
+                                customer_satisfaction_location_support,
                                 nps_region,
                                 new_project_hours_location,
                                 planned_hours_completed_location,
@@ -1600,6 +1636,7 @@ location_data <- prepare_output(keep_cols = c(Month, Group, Metric, Location, Ca
                                 # average_days_to_complete_location,
                                 opened_customer_support_cases_location,
                                 closed_customer_support_cases_location,
+                                customer_support_backlog_location,
                                 initial_response_time_location,
                                 avg_time_to_resolution_location,
                                 # billable_utilization_location,
