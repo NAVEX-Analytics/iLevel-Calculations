@@ -3,8 +3,8 @@ title: "iLevel Calculations"
 author: "NAVEX, Inc."
 date: "`r Sys.Date()`"
 params:
-  from_date: "2024-01-01"
-  to_date: "2024-12-01"
+  from_date: "2025-01-01"
+  to_date: "2025-01-31"
   
 
 ---
@@ -1640,7 +1640,8 @@ region_data <- prepare_output(keep_cols = c(Month, Group, Metric, Region, Calcul
                               initial_response_time_region,
                               avg_time_to_resolution_region,
                               billable_utilization_region,
-                              billable_utilization_cs_prod_region)
+                              billable_utilization_cs_prod_region) %>%
+  filter(Group !=  "Group Total")
 
 ## NG Core Metrics ----
 core_metrics <- region_data %>%
@@ -1682,7 +1683,8 @@ irm_data <- prepare_output(keep_cols = c(Month, Group, Metric, Region, Calculati
                             billable_utilization_cs_prod_irm)
 
 irm_metrics <- irm_data %>%
-  filter(Region %in% c("IRM"))
+  filter(Region %in% c("IRM"),
+         Group != "Group Total")
 
 # Location Metrics ----
 
@@ -1713,7 +1715,8 @@ location_data <- prepare_output(keep_cols = c(Month, Group, Metric, Location, Ca
                                 avg_time_to_resolution_location,
                                 # billable_utilization_location,
                                 # billable_utilization_cs_prod_location
-                                )
+                                ) %>% 
+  filter(Group !=  "Group Total")
 
 
 ## US Metrics ----
