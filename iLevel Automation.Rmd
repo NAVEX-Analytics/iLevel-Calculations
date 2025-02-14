@@ -220,11 +220,11 @@ milestones_monthly_hours <- sf_query(paste0("SELECT Milestone__c,
                                                 Submitted_against_Planned__c,
                                                 Under_Planned_Hours__c
                                               FROM Milestone_Monthly_Hours__c
-                                              WHERE CreatedDate >=", from_date, "T00:00:00.000Z
+                                              WHERE (CreatedDate >=", from_date, "T00:00:00.000Z
+                                                OR (Milestone__r.Actual_Go_Live__c >=", from_date, "
+                                              AND Milestone__r.Actual_Go_Live__c <=", to_date, "))
                                               AND Milestone__r.Account__r.Test_Account__c = FALSE
-                                              AND Milestone__r.pse__Project__r.pse__Is_Template__c = FALSE
-                                              AND Milestone__r.Actual_Go_Live__c >=", from_date, "
-                                              AND Milestone__r.Actual_Go_Live__c <=", to_date, ""))
+                                              AND Milestone__r.pse__Project__r.pse__Is_Template__c = FALSE"))
 
 # Cases
 cases <- sf_query(paste0("SELECT Id,
@@ -404,16 +404,18 @@ milestones <- milestones %>%
 milestones_with_monthly_hours <- milestones_monthly_hours %>% 
   mutate(# Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c)) %m+% months(1),
          Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c))) %>% 
+  mutate(Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c)) %m+% months(1)) %>% 
   left_join(milestones,
-            by=c("Milestone__c" = "Id"# ,
-                 # "Month_Calculated_For__c" = "Month_Actual_Go_Live__c"
+            by=c("Milestone__c" = "Id",
+                 "Month_Calculated_For__c" = "Month_Actual_Go_Live__c"
                  )
             ) %>% 
-  mutate(Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c)) %m+% months(1),
+  mutate(Month_Actual_Go_Live__c = floor_date(Actual_Go_Live__c, unit = "months"),
          `Planned Hours Completed (Last Month)` = Submitted_against_Planned__c + Under_Planned_Hours__c) %>%
-  filter(#Month_Calculated_For__c <= Month_Actual_Go_Live__c,
+  filter(Month_Calculated_For__c <= Month_Actual_Go_Live__c,
          Submitted_against_Planned__c > 0 |
-         Under_Planned_Hours__c > 0
+         Under_Planned_Hours__c > 0 |
+         Overage_Hours__c >0
          )
 
 ds_work_tasks <- ds_work_tasks %>% 
@@ -624,7 +626,7 @@ at_risk_customers_region <- create_metrics(issues,
                                            !Product_Family__c %in% c("Lockpath", "IRM"),
                                           .groups = c(Region = AccountName__r.Reporting_Region__c,
                                                       Risk = Issue_Type__c),
-                                          c(Customers = Id))
+                                          c(Customers = AccountName__c))
 
 at_risk_customers_irm <- create_metrics(issues, 
                                         categories = c(Group = "At Risk Customers", 
@@ -637,7 +639,7 @@ at_risk_customers_irm <- create_metrics(issues,
                                          Issue_Type__c %in% c("Red", "Yellow") &
                                           Product_Family__c %in% c("Lockpath", "IRM"),
                                         .groups = c(Risk = Issue_Type__c),
-                                        c(Customers = Id))
+                                        c(Customers = AccountName__c))
 
 at_risk_customers_location <- create_metrics(issues, 
                                              categories = c(Group = "At Risk Customers", 
@@ -650,7 +652,7 @@ at_risk_customers_location <- create_metrics(issues,
                                            !Product_Family__c %in% c("Lockpath", "IRM"), 
                                              .groups = c(Location = Issue_Owner__r.Location__c,
                                                          Risk = Issue_Type__c),
-                                             c(Customers = Id))
+                                             c(Customers = AccountName__c))
 
 
 
@@ -946,12 +948,13 @@ planned_hours_completed_region <- create_metrics(milestones_with_monthly_hours,
                                                                 Subgroup = "Implementation and Professional Services"),
                                                  .fn = list(sum = sum),
                                                  .filter = pse__Status__c!="Terminated" &
-                                                   (Submitted_against_Planned__c > 0 |
+                                                   (Planned_vs_Billable_Hours_Last_Month__c > 0 |
                                                       Under_Planned_Hours__c > 0) &
                                                    Month_Calculated_For__c >= from_date &
                                                    Month_Calculated_For__c <= to_date & 
-                                                   Group %in% c("Implementation", "Professional Services") & 
-                                                   Product %in% c("EthicsPoint", 
+                                                   Group %in% c("Implementation", "Professional Services") &
+                                                   pse__Project__r.pse__Group__r.Name %in% c("Professional Services", "Implementation") &
+                                                   (Product %in% c("EthicsPoint", 
                                                                     "PolicyTech", 
                                                                     "NAVEXEngage", 
                                                                     "RiskRate", 
@@ -962,7 +965,7 @@ planned_hours_completed_region <- create_metrics(milestones_with_monthly_hours,
                                                  .groups = c(Group = Group,
                                                              Month = Month_Calculated_For__c,
                                                              Region = Account__r.Reporting_Region__c),
-                                                 c(`Planned Hours Completed (Last Month)`, Submitted_Hours__c, Submitted_against_Planned__c, Under_Planned_Hours__c))
+                                                 c(`Planned Hours Completed (Last Month)`, Submitted_Hours__c, Submitted_against_Planned__c, Under_Planned_Hours__c, Total_Planned_Hours__c))
 
 planned_hours_completed_location <- create_metrics(milestones_with_monthly_hours,
                                                    categories = c(Metric = "Planned Hours Completed",
@@ -983,7 +986,7 @@ planned_hours_completed_location <- create_metrics(milestones_with_monthly_hours
                                                                     "WhistleB", 
                                                                     "Other"),
                                                    .groups = c(Group = Group,
-                                                               Month = Month_Calculated_For__c,
+                                                               Month = Month_Actual_Go_Live__c,
                                                                Location = Milestone_PM__r.pse__Region__r.Name),
                                                  c(`Planned Hours Completed (Last Month)`, Submitted_Hours__c, Submitted_against_Planned__c, Under_Planned_Hours__c))
 ## Hour Overages ----
@@ -1004,14 +1007,14 @@ hour_overages_location <- create_metrics(milestones_with_monthly_hours,
                                          categories = c(Metric = "Hour Overages",
                                                         Subgroup = "Implementation and Professional Services"),
                                          .fn = list(sum = sum),
-                                         .filter = pse__Status__c!="Complete" &
-                                           Submitted_against_Planned__c > 0 & 
+                                         .filter = pse__Status__c=="Complete" &
+                                           Planned_Hours_Overages_Last_Month__c > 0 & 
                                            Group %in% c("Implementation", "Professional Services") & 
                                            Product %in% c("EthicsPoint", "PolicyTech", "NAVEXEngage", "RiskRate", "ESG", "Disclosure Manager", "WhistleB", "Other"),
                                          .groups = c(Group = Group,
                                                      Month = Month_new_project_hours_date,
                                                      Location = Milestone_PM__r.pse__Region__r.Name),
-                                         c(`Hour Overages (Last Month)` = Submitted_against_Planned__c))
+                                         c(`Hour Overages (Last Month)` = Submitted_against_Planned__c, Planned_Hours_Overages_Last_Month__c, Overage_Hours__c, Submitted_Hours__c))
 
 ## Hour Overages for % Complete Milestones ----
 hour_overages_percent_completed_region <- create_metrics(milestones_with_monthly_hours,
@@ -1083,12 +1086,12 @@ on_time_completion_region <- create_metrics(milestones,
                                                            Subgroup = "Implementation and Professional Services"),
                                            .fn = list(mean = mean),
                                            .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
-                                             Actual_Go_Live__c >= from_date &
-                                             Actual_Go_Live__c <= to_date & 
+                                             Actual_Go_Live__c %between% c(from_date, to_date) & 
                                              Group %in% c("Implementation", "Professional Services") & 
-                                             Product %in% c("EthicsPoint", "PolicyTech", "NAVEXEngage", "RiskRate", "ESG", "Disclosure Manager", "WhistleB", "Other"),
+                                             Product %in% c("EthicsPoint", "PolicyTech", "NAVEXEngage", "RiskRate", "ESG", "Disclosure Manager", "WhistleB", "Other") &
+                                             pse__Status__c == "Complete",
                                            .groups = c(Group = Group,
-                                                       Month = Month_new_project_hours_date,
+                                                       Month = Month_Actual_Go_Live__c,
                                                        Region = Account__r.Reporting_Region__c),
                                            c(`On Time Completion` = Milestone_On_Time_TD__c, `Calculated Duration (Days)` = Calculated_Duration_days__c))
 
@@ -1097,12 +1100,12 @@ on_time_completion_location <- create_metrics(milestones,
                                                         Subgroup = "Implementation and Professional Services"),
                                          .fn = list(mean = mean),
                                          .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
-                                           Actual_Go_Live__c >= from_date &
-                                           Actual_Go_Live__c <= to_date & 
+                                           Actual_Go_Live__c %between% c(from_date, to_date) & 
                                            Group %in% c("Implementation", "Professional Services") & 
-                                           Product %in% c("EthicsPoint", "PolicyTech", "NAVEXEngage", "RiskRate", "ESG", "Disclosure Manager", "WhistleB", "Other"),
+                                           Product %in% c("EthicsPoint", "PolicyTech", "NAVEXEngage", "RiskRate", "ESG", "Disclosure Manager", "WhistleB", "Other") &
+                                           pse__Status__c == "Complete",
                                          .groups = c(Group = Group,
-                                                     Month = Month_new_project_hours_date,
+                                                     Month = Month_Actual_Go_Live__c,
                                                      Location = Milestone_PM__r.pse__Region__r.Name),
                                          c(`On Time Completion` = Milestone_On_Time_TD__c, `Calculated Duration (Days)`  = Calculated_Duration_days__c))
 
@@ -1113,8 +1116,7 @@ delivery_efficiency_region <- create_metrics(milestones,
                                                  .fn = list(sum = ~ sum(.x, na.rm = TRUE)),
                                              .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
                                                 pse__Status__c=="Complete" &
-                                                Actual_Go_Live__c >= from_date &
-                                                Actual_Go_Live__c <= to_date & 
+                                                Actual_Go_Live__c %between% c(from_date, to_date) & 
                                              Group %in% c("Implementation", "Professional Services") & 
                                              Product %in% c("EthicsPoint", "PolicyTech", "NAVEXEngage", "RiskRate", "ESG", "Disclosure Manager", "WhistleB", "Other"),
                                            .groups = c(Group = Group,
@@ -1131,8 +1133,7 @@ delivery_efficiency_location <- create_metrics(milestones,
                                                    .fn = list(sum = ~ sum(.x, na.rm = TRUE)),
                                                .filter = pse__Project__r.pse__Project_Status__c!="Terminated" &
                                                   pse__Status__c=="Complete" &
-                                                  Actual_Go_Live__c >= from_date &
-                                                  Actual_Go_Live__c <= to_date & 
+                                                  Actual_Go_Live__c %between% c(from_date, to_date) &
                                                  Group %in% c("Implementation", "Professional Services") & 
                                                  Product %in% c("EthicsPoint", "PolicyTech", "NAVEXEngage", "RiskRate", "ESG", "Disclosure Manager", "WhistleB", "Other"),
                                                .groups = c(Group = Group,
@@ -1224,8 +1225,7 @@ opened_customer_support_cases_irm <- create_metrics(csr_cases,
                                                                    Region = "IRM",
                                                                    Product = "IRM"),
                                                     .fn = list(count = n_distinct),
-                                                    .filter = CreatedDate >= from_date & 
-                                                      CreatedDate <= to_date & 
+                                                    .filter = CreatedDate %between% c(from_date, to_date) & 
                                                       Product %in% c("Lockpath"),
                                                     .groups = c(Month = Month_CreatedDate),
                                                     c(`Opened Cases` = Id))
