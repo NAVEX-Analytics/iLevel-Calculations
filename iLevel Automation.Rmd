@@ -38,13 +38,15 @@ to_date <- params$to_date
 currency_conversion <- sf_query("SELECT IsoCode, ConversionRate FROM CurrencyType")
 
 # Accounts
-accounts <- sf_query("SELECT 
+accounts <- sf_query("SELECT Id,
+                        Account_Market_Segment__c,
                         Customer_Success_Segment__c, 
                         Total_Asset_ARR__c, 
                         CurrencyIsoCode, 
-                        Reporting_Region__c 
-                      FROM Account 
-                      WHERE Customer_Success_Account__c = TRUE")
+                        Reporting_Region__c,
+                        Customer_Success_Account__c
+                      FROM Account
+                      WHERE Type IN ('Customer', 'Former Customer', 'Defunct')")
 
 # Issues
 issues <- sf_query("SELECT Id,
@@ -74,7 +76,8 @@ nps_surveys <- sf_query(paste0("SELECT Account__c,
                                   Account__r.CurrencyIsoCode,
                                   Account__r.Total_Asset_ARR__c,
                                   Account__r.Owner.Name,
-                                  Account__r.Reporting_Region__c 
+                                  Account__r.Reporting_Region__c,
+                                  Account__r.Account_Market_Segment__c
                                 FROM NPS_Survey_Results__c 
                                 WHERE Account__c != null 
                                 AND Account__r.Test_Account__c = FALSE 
@@ -133,6 +136,7 @@ surveys <- sf_query(paste0("SELECT Id,
                               Account__r.Owner.Name,
                               Account__r.Owner.Sales_Rep_Role__c,
                               Account__r.Reporting_Region__c,
+                              Account__r.Account_Market_Segment__c,
                               PSE_Project__r.pse__Project_Manager__r.pse__Region__r.Name,
                               Case__r.Owner__r.Location__c,
                               Case__r.Owner__r.Name, 
@@ -342,6 +346,7 @@ timecards <- sf_query(paste0("SELECT
 ```{r add_bucket_columns}
 
 accounts <- accounts %>% 
+  filter(Customer_Success_Account__c==TRUE) %>% 
   left_join(currency_conversion,
             by=c("CurrencyIsoCode" = "IsoCode")) %>% 
   mutate(Total_Asset_ARR__c_USD = Total_Asset_ARR__c / ConversionRate)
