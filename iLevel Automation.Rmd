@@ -3,8 +3,8 @@ title: "iLevel Calculations"
 author: "NAVEX, Inc."
 date: "`r Sys.Date()`"
 params:
-  from_date: "2025-01-01"
-  to_date: "2025-01-31"
+  from_date: "2025-02-01"
+  to_date: "2025-03-01"
   
 
 ---
@@ -966,7 +966,7 @@ planned_hours_completed_region <- create_metrics(milestones_with_monthly_hours,
                                                                     "ESG", 
                                                                     "Disclosure Manager", 
                                                                     "WhistleB", 
-                                                                    "Other"),
+                                                                    "Other")),
                                                  .groups = c(Group = Group,
                                                              Month = Month_Calculated_For__c,
                                                              Region = Account__r.Reporting_Region__c),
@@ -1236,7 +1236,8 @@ opened_customer_support_cases_irm <- create_metrics(csr_cases,
                                                     c(`Opened Cases` = Id))
 
 opened_customer_support_cases_location <- create_metrics(csr_cases,
-                                                         categories = c(Metric = "Opened Customer Support Cases"),
+                                                         categories = c(Metric = "Opened Customer Support Cases",
+                                                                      Group = "Customer Support"),
                                                              .fn = list(count = n_distinct),
                                                          .filter = CreatedDate >= from_date & CreatedDate <= to_date,
                                                          .groups = c(Month = Month_CreatedDate,
@@ -1291,8 +1292,7 @@ opened_discontinuation_cases_region <- create_metrics(dc_cases,
                                                       .filter = CreatedDate >= from_date & 
                                                         CreatedDate <= to_date,
                                                       .groups = c(Month = Month_CreatedDate,
-                                                                  Region = Account.Reporting_Region__c, 
-                                                                  Product = Product),
+                                                                  Region = Account.Reporting_Region__c),
                                                       c(`Opened Cases` = Id))
 
 opened_discontinuation_cases_irm <- create_metrics(dc_cases,
@@ -1314,8 +1314,7 @@ opened_discontinuation_cases_location <- create_metrics(dc_cases,
                                                        .filter = CreatedDate >= from_date & 
                                                          CreatedDate <= to_date,
                                                        .groups = c(Month = Month_CreatedDate,
-                                                                   Location = Owner__r.Location__c, 
-                                                                   Product = Product),
+                                                                   Location = Owner__r.Location__c),
                                                        c(`Opened Cases` = Id))
 
 
@@ -1328,8 +1327,7 @@ closed_discontinuation_cases_region <- create_metrics(dc_cases,
                                                       .filter = ClosedDate >= from_date & 
                                                         ClosedDate <= to_date,
                                                       .groups = c(Month = Month_ClosedDate,
-                                                                  Region = Account.Reporting_Region__c, 
-                                                                  Product = Product),
+                                                                  Region = Account.Reporting_Region__c),
                                                       c(`Opened Cases` = Id))
 
 closed_discontinuation_cases_irm <- create_metrics(dc_cases,
@@ -1350,8 +1348,7 @@ closed_discontinuation_cases_location <- create_metrics(dc_cases,
                                                         .fn = list(count = n_distinct),
                                                         .filter = ClosedDate >= from_date & ClosedDate <= to_date,
                                                         .groups = c(Month = Month_ClosedDate,
-                                                                    Location = Owner__r.Location__c, 
-                                                                    Product = Product),
+                                                                    Location = Owner__r.Location__c),
                                                         c(`Opened Cases` = Id))
 
 
@@ -1461,8 +1458,8 @@ avg_time_to_resolution_location <- create_metrics(csr_cases,
 
 
 billable_utilization_region <- create_metrics(utilization_details,
-                                              categories = c(Metric = "Customer Support Backlog",
-                                                             Group = "Customer Support"),
+                                              categories = c(Metric = "Billable Utilization",
+                                                             Group = "Billable Utilization"),
                                               .fn = list(sum = sum),
                                               .filter = pse__Historical_Start_Date__c >= from_date &
                                                 pse__Historical_Start_Date__c <= to_date,
@@ -1474,8 +1471,7 @@ billable_utilization_region <- create_metrics(utilization_details,
          .keep = "unused")
 
 billable_utilization_irm <- create_metrics(utilization_details,
-                                           categories = c(Metric = "Customer Support Backlog",
-                                                          Group = "Customer Support",
+                                           categories = c(Metric = "Billable Utilization",
                                                           Region = "IRM",
                                                           Product = "IRM"),
                                            .fn = list(sum = sum),
@@ -1488,12 +1484,24 @@ billable_utilization_irm <- create_metrics(utilization_details,
     mutate(`% of Billable Utilization` = `sum of Billable Hours` / `sum of Calendar Hours`,
            .keep = "unused")
 
+billable_utilization_location <- create_metrics(utilization_details,
+                                              categories = c(Metric = "Billable Utilization",
+                                                             Group = "Billable Utilization"),
+                                              .fn = list(sum = sum),
+                                              .filter = pse__Historical_Start_Date__c >= from_date &
+                                                pse__Historical_Start_Date__c <= to_date,
+                                              .groups = c(Month = Month_pse__Historical_Start_Date__c,
+                                                          Location = pse__Resource__r.pse__Region__r.Name),
+                                              c(`Billable Hours` = pse__Historical_Billable_Hours__c, `Calendar Hours` = pse__Historical_Calendar_Hours__c)) %>% 
+  mutate(`% of Billable Utilization` = `sum of Billable Hours` / `sum of Calendar Hours`,
+         .keep = "unused")
+
 
 ## Billable Utilization - CS Prod Metrics ----
 
 billable_utilization_cs_prod_region <- create_metrics(utilization_details_cs_prod,
-                                                      categories = c(Metric = "Customer Support Backlog",
-                                                                     Group = "Customer Support"),
+                                                      categories = c(Metric = "Billable Utilization - Customer Support Productive",
+                                                             Group = "Billable Utilization"),
                                                       .fn = list(sum = sum),
                                                       .filter = pse__Historical_Start_Date__c >= from_date &
                                                         pse__Historical_Start_Date__c <= to_date,
@@ -1506,7 +1514,7 @@ billable_utilization_cs_prod_region <- create_metrics(utilization_details_cs_pro
            .keep = "unused")
 
 billable_utilization_cs_prod_irm <- create_metrics(utilization_details_cs_prod,
-                                                   categories = c(Metric = "Customer Support Backlog",
+                                                   categories = c(Metric = "Billable Utilization - Customer Support Productive",
                                                                   Group = "Customer Support",
                                                                   Region = "IRM",
                                                                   Product = "IRM"),
@@ -1520,6 +1528,19 @@ billable_utilization_cs_prod_irm <- create_metrics(utilization_details_cs_prod,
   mutate(`CS Prod % of Billable Utilization` = `sum of Billable Hours` / `sum of Net Calendar Hours`,
          .keep = "unused")
 
+billable_utilization_cs_prod_location <- create_metrics(utilization_details_cs_prod,
+                                                      categories = c(Metric = "Billable Utilization - Customer Support Productive",
+                                                             Group = "Billable Utilization"),
+                                                      .fn = list(sum = sum),
+                                                      .filter = pse__Historical_Start_Date__c >= from_date &
+                                                        pse__Historical_Start_Date__c <= to_date,
+                                                      .groups = c(Month = Month_pse__Historical_Start_Date__c,
+                                                                  Location = pse__Resource__r.pse__Region__r.Name, 
+                                                                  Product = Product),
+                                                      c(`Billable Hours` = pse__Historical_Billable_Hours__c, 
+                                                        `Net Calendar Hours` = `Net Calendar Hours`)) %>% 
+    mutate(`CS Prod % of Billable Utilization` = `sum of Billable Hours` / `sum of Net Calendar Hours`,
+           .keep = "unused")
 
 # EMEA Specific Metrics ----
 
@@ -1590,7 +1611,7 @@ billable_hours_region <- create_metrics(utilization_details,
                                         c(`Billable Hours` = pse__Historical_Billable_Hours__c))
 
 ## Customer Non-Billable Hours by Region and Group
-billable_hours_region <- create_metrics(utilization_details,
+non_billable_hours_region <- create_metrics(utilization_details,
                                         categories = c(Metric = "Total Billable Hours"),
                                         .fn = list(sum = sum),
                                         .filter = pse__Resource__r.pse__Group__r.Name %in% c("Professional Services", 
@@ -1641,11 +1662,20 @@ region_data <- prepare_output(keep_cols = c(Month, Group, Metric, Region, Calcul
                               ds_on_time_completion_region,
                               average_days_to_complete_region,
                               opened_customer_support_cases_region,
+                              opened_discontinuation_cases_region,
                               closed_customer_support_cases_region,
+                              closed_discontinuation_cases_region,
+                              customer_support_backlog_region,
                               initial_response_time_region,
                               avg_time_to_resolution_region,
                               billable_utilization_region,
-                              billable_utilization_cs_prod_region) %>%
+                              billable_utilization_cs_prod_region,
+                              # ps_onsite_region,
+                              ps_bookings_region,
+                              survey_return_rate_region,
+                              account_arr_region,
+                              billable_hours_region,
+                              non_billable_hours_region) %>%
   filter(Group !=  "Group Total")
 
 ## NG Core Metrics ----
@@ -1681,7 +1711,9 @@ irm_data <- prepare_output(keep_cols = c(Month, Group, Metric, Region, Calculati
                             # ds_on_time_completion_irm,
                             # average_days_to_complete_irm,
                             opened_customer_support_cases_irm,
+                           opened_discontinuation_cases_region,
                             closed_customer_support_cases_irm,
+                           closed_discontinuation_cases_irm,
                             # initial_response_time_irm,
                             # avg_time_to_resolution_irm,
                             billable_utilization_irm,
@@ -1715,11 +1747,14 @@ location_data <- prepare_output(keep_cols = c(Month, Group, Metric, Location, Ca
                                 # ds_on_time_completion_location,
                                 # average_days_to_complete_location,
                                 opened_customer_support_cases_location,
+                                opened_discontinuation_cases_location,
                                 closed_customer_support_cases_location,
+                                closed_discontinuation_cases_location,
+                                customer_support_backlog_location,
                                 initial_response_time_location,
                                 avg_time_to_resolution_location,
-                                # billable_utilization_location,
-                                # billable_utilization_cs_prod_location
+                                billable_utilization_location,
+                                billable_utilization_cs_prod_location
                                 ) %>% 
   filter(Group !=  "Group Total")
 
