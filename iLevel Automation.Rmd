@@ -3,8 +3,8 @@ title: "iLevel Calculations"
 author: "NAVEX, Inc."
 date: "`r Sys.Date()`"
 params:
-  from_date: "2025-02-01"
-  to_date: "2025-03-01"
+  from_date: "2025-03-01"
+  to_date: "2025-04-01"
   
 
 ---
@@ -343,6 +343,7 @@ timecards <- sf_query(paste0("SELECT
 
 ```
 
+# Transformations
 ```{r add_bucket_columns}
 
 accounts <- accounts %>% 
@@ -404,20 +405,21 @@ milestones <- milestones %>%
                                                 CreatedDate <= to_date & 
                                                 grepl("Course Swap", Name) ~ as.Date(ymd_hms(CreatedDate)),
                                             TRUE ~ NA),
-         across(c(new_project_hours_date, pse__Project__r.pse__Opportunity__r.CloseDate, Actual_Go_Live__c, CreatedDate), ~ floor_date(., "months"), .names = "Month_{.col}"))
+         across(c(new_project_hours_date, pse__Project__r.pse__Opportunity__r.CloseDate, Actual_Go_Live__c, CreatedDate), 
+                ~ floor_date(., "months"), .names = "Month_{.col}"))
 
 milestones_with_monthly_hours <- milestones_monthly_hours %>% 
-  mutate(# Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c)) %m+% months(1),
-         Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c))) %>% 
+  # mutate(# Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c)) %m+% months(1),
+  #        Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c))) %>% 
   mutate(Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c)) %m+% months(1)) %>% 
   left_join(milestones,
-            by=c("Milestone__c" = "Id",
-                 "Month_Calculated_For__c" = "Month_Actual_Go_Live__c"
+            by=c("Milestone__c" = "Id"#,
+                 # "Month_Calculated_For__c" = "Month_Actual_Go_Live__c"
                  )
             ) %>% 
   mutate(Month_Actual_Go_Live__c = floor_date(Actual_Go_Live__c, unit = "months"),
          `Planned Hours Completed (Last Month)` = Submitted_against_Planned__c + Under_Planned_Hours__c) %>%
-  filter(Month_Calculated_For__c <= Month_Actual_Go_Live__c,
+  filter(is.na(Month_Actual_Go_Live__c) | Month_Calculated_For__c <= Month_Actual_Go_Live__c,
          Submitted_against_Planned__c > 0 |
          Under_Planned_Hours__c > 0 |
          Overage_Hours__c >0
@@ -504,6 +506,7 @@ utilization_details_cs_prod <- utilization_details %>%
  
 ```
 
+# Functions
 ```{r metric_function}
 
 create_metrics <- function(df, categories, .fn, .filters = TRUE, ..., .groups = NULL) {
@@ -563,6 +566,7 @@ create_metrics <- function(df, categories, .fn, .filters = TRUE, ..., .groups = 
 
 ```
 
+# Calculations
 ```{r calculate_metrics}
 
 # At Risk Customers ----
@@ -1158,10 +1162,10 @@ tasks_opened_region <- create_metrics(ds_work_tasks,
                                                       Group = "Web Services, Technical Specialists, and Data Services - Telecom",
                                                       Region = "Core"),
                                        .fn = list(count = n_distinct),
-                                       .filter = Date_Work_Task_Opened__c >= from_date & Date_Work_Task_Opened__c <= to_date,
+                                       .filter = Date_Work_Task_Opened__c %within% interval(from_date, to_date),
                                        .groups = c(Month = Month_Date_Work_Task_Opened__c,
                                                    Team = Team),
-                                       c(`Completed Tasks` = Id))
+                                       c(`Opened Tasks` = Id))
 
 ## Tasks Closed ----
 tasks_closed_region <- create_metrics(ds_work_tasks,
@@ -1491,7 +1495,8 @@ billable_utilization_location <- create_metrics(utilization_details,
                                               .filter = pse__Historical_Start_Date__c >= from_date &
                                                 pse__Historical_Start_Date__c <= to_date,
                                               .groups = c(Month = Month_pse__Historical_Start_Date__c,
-                                                          Location = pse__Resource__r.pse__Region__r.Name),
+                                                          Location = pse__Resource__r.pse__Region__r.Name, 
+                                                          Product = Product),
                                               c(`Billable Hours` = pse__Historical_Billable_Hours__c, `Calendar Hours` = pse__Historical_Calendar_Hours__c)) %>% 
   mutate(`% of Billable Utilization` = `sum of Billable Hours` / `sum of Calendar Hours`,
          .keep = "unused")
@@ -1680,7 +1685,7 @@ region_data <- prepare_output(keep_cols = c(Month, Group, Metric, Region, Calcul
 
 ## NG Core Metrics ----
 core_metrics <- region_data %>%
-  filter(Region %in% c("Region Total", "Grand Total"))
+  filter(Region %in% c("Region Total", "Grand Total", "Core"))
 
 ## AMER Metrics ----
 amer_metrics <- region_data %>%
