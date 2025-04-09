@@ -3,7 +3,7 @@ title: "iLevel Calculations"
 author: "NAVEX, Inc."
 date: "`r Sys.Date()`"
 params:
-  from_date: "2025-03-01"
+  from_date: "2025-01-01"
   to_date: "2025-04-01"
   
 
@@ -37,6 +37,20 @@ to_date <- params$to_date
 # Currency Type Conversion
 currency_conversion <- sf_query("SELECT IsoCode, ConversionRate FROM CurrencyType")
 
+# User and Contact Detail
+user_contact_detail <- sf_query("SELECT Id,
+                                    ManagerId,
+                                    Manager.Name,
+                                    (SELECT
+                                      Id,
+                                      Name,
+                                      Email,
+                                      pse__Region__r.Name,
+                                      pse__Group__r.Name
+                                    FROM pse__Contacts__r)
+                                  FROM User
+                                  WHERE Id IN (SELECT pse__Salesforce_User__c FROM Contact WHERE pse__Is_Resource_Active__c = TRUE)")
+
 # Accounts
 accounts <- sf_query("SELECT Id,
                         Account_Market_Segment__c,
@@ -57,6 +71,7 @@ issues <- sf_query("SELECT Id,
                       AccountName__r.CurrencyIsoCode,
                       Product_Family__c,
                       AccountName__r.Reporting_Region__c,
+                      Issue_Owner__c,
                       Issue_Owner__r.Location__c,
                       Name,
                       Date_Reported__c,
@@ -138,6 +153,7 @@ surveys <- sf_query(paste0("SELECT Id,
                               Account__r.Reporting_Region__c,
                               Account__r.Account_Market_Segment__c,
                               PSE_Project__r.pse__Project_Manager__r.pse__Region__r.Name,
+                              Case__r.Owner__c,
                               Case__r.Owner__r.Location__c,
                               Case__r.Owner__r.Name, 
                               Case__r.Owner__r.Manager.Name
@@ -218,6 +234,7 @@ milestones <- sf_query(paste0("SELECT
 
 milestones_monthly_hours <- sf_query(paste0("SELECT Milestone__c,
                                                 Calculated_For__c, 
+                                                Calculated_For_Date__c,
                                                 Overage_Hours__c,
                                                 Planned_Hours__c,
                                                 Submitted_Hours__c,
@@ -225,8 +242,8 @@ milestones_monthly_hours <- sf_query(paste0("SELECT Milestone__c,
                                                 Under_Planned_Hours__c
                                               FROM Milestone_Monthly_Hours__c
                                               WHERE (CreatedDate >=", from_date, "T00:00:00.000Z
-                                                OR (Milestone__r.Actual_Go_Live__c >=", from_date, "
-                                              AND Milestone__r.Actual_Go_Live__c <=", to_date, "))
+                                                OR (Calculated_For_Date__c >=", from_date, "
+                                              AND Calculated_For_Date__c <=", to_date, "))
                                               AND Milestone__r.Account__r.Test_Account__c = FALSE
                                               AND Milestone__r.pse__Project__r.pse__Is_Template__c = FALSE"))
 
@@ -239,6 +256,7 @@ cases <- sf_query(paste0("SELECT Id,
                             CreatedDate,
                             ClosedDate,
                             Account.Reporting_Region__c,
+                            Owner__c,
                             Owner.Name,
                             Owner__r.Name,
                             Owner__r.Location__c,
@@ -263,6 +281,7 @@ cases <- sf_query(paste0("SELECT Id,
 ds_work_tasks <- sf_query(paste0("SELECT Id, 
                                     Date_Work_Task_Complete__c, 
                                     Date_Work_Task_Opened__c,
+                                    OwnerId,
                                     Owner.Name,
                                     Related_Case__r.DS_Resource_Team__c,
                                     Related_PSA_Resource__r.pse__Group__r.Name,
@@ -273,6 +292,7 @@ ds_work_tasks <- sf_query(paste0("SELECT Id,
                                   AND Related_Case__r.DS_Resource_Team__c IN ('Client Interface', 'Technical Specialist', 'Telecom')
                                   AND (Date_Work_Task_Opened__c >= ", from_date, " 
                                       OR Date_Work_Task_Complete__c >= ", from_date, ") "))
+
 
 # Utilization Details
 utilization_details <- sf_query(paste0("SELECT Utilization_Calculation_Name__c,
@@ -319,7 +339,8 @@ timecards <- sf_query(paste0("SELECT
                                 pse__Milestone__r.Name,
                                 pse__Resource__r.Full_Name__c,
                                 pse__Resource__r.pse__Salesforce_User__r.Manager.Name,
-                                pse__Resource__r.pse__Group__r.Name
+                                pse__Resource__r.pse__Group__r.Name,
+                                pse__Resource__r.pse__Region__r.Name
                               FROM pse__Timecard__c
                               WHERE pse__Milestone__r.Name = 'Time Off'
                               AND pse__Status__c = 'Approved'
@@ -355,12 +376,15 @@ accounts <- accounts %>%
 issues <- issues %>% 
   left_join(currency_conversion,
             by=c("AccountName__r.CurrencyIsoCode" = "IsoCode")) %>% 
+  left_join(user_contact_detail, 
+            by=c("Issue_Owner__c" = "Id")) %>% 
   mutate(AccountName__r.Total_Asset_ARR__c = AccountName__r.Total_Asset_ARR__c / ConversionRate,
          across(c(Date_Closed__c, Date_Reported__c), ~ floor_date(., "months"), .names = "Month_{.col}"))
 
 opportunities_with_products <- opportunities_with_products %>% 
   mutate(OpportunityLineItem.TotalPrice_USD = OpportunityLineItem.TotalPrice / Currency_Conversion_Rate_at_Close__c,
-         across(c(CloseDate), ~ floor_date(., "months"), .names = "Month_{.col}"))
+         across(c(CloseDate), ~ floor_date(., "months"), .names = "Month_{.col}")) %>% 
+  left_join(user_contact_detail, by=c("Services_Referred_by_Users__c" = "Id"))
 
 opportunities <- opportunities_with_products %>% 
   filter(Services_Lead_Source__c == 'Up Sell',
@@ -371,6 +395,7 @@ opportunities <- opportunities_with_products %>%
   distinct(across(-starts_with("OpportunityLineItem.")))
 
 surveys <- surveys %>% 
+  left_join(user_contact_detail, by=c("Case__r.Owner__c" = "Id")) %>% 
   mutate(`AE Segment` = Account__r.Owner.Sales_Rep_Role__c,
          `AE Segment` = case_when(`AE Segment` %in% c("AE1-EAPJ", "AE1-F") ~ "AE1",
                                   `AE Segment` %in% c("AE2-EAPJ", "AE2-F") ~ "AE2",
@@ -394,6 +419,9 @@ milestones <- milestones %>%
                              Product %in% c("Incident Management") ~ "EthicsPoint",
                              Product %in% c("Disclosure Management") ~ "Disclosure Manager",
                              Product %in% c("Policy Management") ~ "PolicyTech",
+                             Product %in% c("IRM") ~ "IRM",
+                             Product %in% c("RCM") ~ "RCM",
+                             Product %in% c("WhistleB") ~ "WhistleB",
                              TRUE ~ "Other"),
          Group = case_when(Product__r.GL_Group__c %in% c("Other Services", "Required Setup") ~ "Implementation",
                            TRUE ~ Product__r.GL_Group__c),
@@ -411,7 +439,9 @@ milestones <- milestones %>%
 milestones_with_monthly_hours <- milestones_monthly_hours %>% 
   # mutate(# Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c)) %m+% months(1),
   #        Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c))) %>% 
-  mutate(Month_Calculated_For__c = dmy(paste0("1", Calculated_For__c)) %m+% months(1)) %>% 
+  mutate(Last_Month = Calculated_For_Date__c %>% floor_date("months"),
+         Month_Calculated_For__c = Last_Month %m+% months(1)
+         ) %>% 
   left_join(milestones,
             by=c("Milestone__c" = "Id"#,
                  # "Month_Calculated_For__c" = "Month_Actual_Go_Live__c"
@@ -419,13 +449,15 @@ milestones_with_monthly_hours <- milestones_monthly_hours %>%
             ) %>% 
   mutate(Month_Actual_Go_Live__c = floor_date(Actual_Go_Live__c, unit = "months"),
          `Planned Hours Completed (Last Month)` = Submitted_against_Planned__c + Under_Planned_Hours__c) %>%
-  filter(is.na(Month_Actual_Go_Live__c) | Month_Calculated_For__c <= Month_Actual_Go_Live__c,
+  filter(is.na(Month_Actual_Go_Live__c) | 
+           Last_Month <= (Month_Actual_Go_Live__c %m+% months(2)),
          Submitted_against_Planned__c > 0 |
          Under_Planned_Hours__c > 0 |
          Overage_Hours__c >0
          )
 
 ds_work_tasks <- ds_work_tasks %>% 
+  left_join(user_contact_detail, by=c("OwnerId" = "Id")) %>% 
   mutate(Team = case_when(Related_Case__r.DS_Resource_Team__c == "Client Interface" | 
                             (Related_Case__r.DS_Resource_Team__c=="Telecom" & 
                                Related_PSA_Resource__r.pse__Group__r.Name == "Customer Interface")  ~ "Web Services",
@@ -435,6 +467,9 @@ ds_work_tasks <- ds_work_tasks %>%
                           TRUE ~ NA),
          across(c(Date_Work_Task_Opened__c, Date_Work_Task_Complete__c), ~ floor_date(., "months"), .names = "Month_{.col}"))
 
+cases <- cases %>% 
+  left_join(user_contact_detail, by=c("Owner__c" = "Id"))
+
 csr_cases <- cases %>% 
   mutate(Product = Client_Care_Team__c,
          Product =  case_when(Product %in% c("EthicsPoint", "EU EthicsPoint", "Telephony Support") ~ "EthicsPoint", 
@@ -442,7 +477,7 @@ csr_cases <- cases %>%
                               Product %in% c("Online Training", "EU Online Training") ~ "NAVEXEngage", 
                               Product %in% c("RiskRate", "EU RiskRate") ~ "RiskRate", 
                               Product %in% c("AlertLine / IntegriLink", "EU AlertLine / IntegriLink") ~ "AlertLine", 
-                              Product %in% c("ESG", "EU ESG") ~ "Other", 
+                              Product %in% c("ESG", "EU ESG") ~ "ESG", 
                               Product %in% c("Disclosures", "EU Disclosures") ~ "Disclosure Manager", 
                               Product %in% c("WhistleB") ~ "WhistleB", 
                               Product %in% c("Lockpath") ~ "Lockpath",
@@ -469,7 +504,8 @@ dc_cases <- cases %>%
   mutate(Product = Product_Family_Picklist__c,
          Product = case_when(Product %in% c("3P Risk Management") ~ "RiskRate",
                              Product %in% c("AlertLine / IntegriLink") ~ "Alertline",
-                             Product %in% c("Awareness", "ESG", "Expolink", "GRC Insights", "NAVEX One", "NG Gateway", NA) ~ "Other",
+                             Product %in% c("Awareness", "Expolink", "GRC Insights", "NAVEX One", "NG Gateway", NA) ~ "Other",
+                             Product %in% c("ESG") ~ "ESG",
                              Product %in% c("Compliance Training", "NG Compliance Training") ~ "Compliance Training",
                              Product %in% c("Disclosure Management") ~ "Disclosure Management",
                              Product %in% c("EP Case Management", "EP Hotline", "EP Incident Management", "Incident Management", "Telephony") ~ "EthicsPoint",
@@ -618,7 +654,7 @@ at_risk_arr_location <- create_metrics(issues,
                                         Issue_Type__c %in% c("Red", "Yellow") &
                                         !Product_Family__c %in% c("Lockpath", "IRM"),
                                        c(`ARR at Risk` = AccountName__r.Total_Asset_ARR__c),
-                                       .groups = c(Location = Issue_Owner__r.Location__c, 
+                                       .groups = c(Location = Contact.pse__Region__r.Name, 
                                                    Risk = Issue_Type__c)
                                        )
 
@@ -659,7 +695,7 @@ at_risk_customers_location <- create_metrics(issues,
                                                                         "Open - NPS") &
                                                Issue_Type__c %in% c("Red", "Yellow") &
                                            !Product_Family__c %in% c("Lockpath", "IRM"), 
-                                             .groups = c(Location = Issue_Owner__r.Location__c,
+                                             .groups = c(Location = Contact.pse__Region__r.Name,
                                                          Risk = Issue_Type__c),
                                              c(Customers = AccountName__c))
 
@@ -702,7 +738,7 @@ at_risk_issues_opened_location <- create_metrics(issues,
                                                    Issue_Type__c %in% c("Red", "Yellow") &
                                                    !Product_Family__c %in% c("Lockpath", "IRM"), 
                                                  .groups = c(Month = Month_Date_Reported__c,
-                                                             Location = Issue_Owner__r.Location__c,
+                                                             Location = Contact.pse__Region__r.Name,
                                                              Risk = Issue_Type__c),
                                                  c(`Issues Opened` = Id))
 
@@ -743,7 +779,7 @@ at_risk_issues_closed_location <- create_metrics(issues,
                                                    Issue_Type__c %in% c("Red", "Yellow") &
                                                    !Product_Family__c %in% c("Lockpath", "IRM"), 
                                                  .groups = c(Month = Month_Date_Closed__c,
-                                                             Location = Issue_Owner__r.Location__c,
+                                                             Location = Contact.pse__Region__r.Name,
                                                              Risk = Issue_Type__c),
                                                  c(`Issues Closed` = Id))
 
@@ -771,8 +807,8 @@ qualified_leads_booked_location <- create_metrics(opportunities %>%
                                                     CloseDate >= from_date & 
                                                     CloseDate <= to_date,
                                                   .groups = c(Month = Month_CloseDate,
-                                                            Location = Services_Referred_by_Users__r.Location__c,
-                                                              Team = Services_Referred_by_Users__r.Group__c),
+                                                              Location = Contact.pse__Region__r.Name,
+                                                              Team = Contact.pse__Group__r.Name),
                                                   c(Amount))
 
 # Customer Satisfaction ----
@@ -815,12 +851,12 @@ product_support_customer_satisfaction_location <- create_metrics(surveys,
                                                                                   Survey = "Support and Product"),
                                                                  .fn = list(average = ~ .x %>% na.omit %>% mean),
                                                                  .filter = RecordType.Name == "Client Support" &
-                                                                   Case__r.Owner__r.Location__c %in% c("EU", "US", "India") &
+                                                                   # Case__r.Owner__r.Location__c %in% c("EU", "US", "India") &
                                                                    !Project_Primary_Product__c %in% c("Lockpath", "IRM") &
                                                                    Survey_Completed__c >= from_date &
                                                                    Survey_Completed__c <= to_date,
                                                                    .groups = c(Month = Month_Survey_Completed__c,
-                                                                               Location = Case__r.Owner__r.Location__c,
+                                                                               Location = Contact.pse__Region__r.Name,
                                                                                `AE Segment` = `AE Segment`,
                                                                                `Record Type` = RecordType.Name),
                                                                    c(`Customer Support CSAT` = Q1_Technician_Assist__c, 
@@ -974,7 +1010,11 @@ planned_hours_completed_region <- create_metrics(milestones_with_monthly_hours,
                                                  .groups = c(Group = Group,
                                                              Month = Month_Calculated_For__c,
                                                              Region = Account__r.Reporting_Region__c),
-                                                 c(`Planned Hours Completed (Last Month)`, Submitted_Hours__c, Submitted_against_Planned__c, Under_Planned_Hours__c, Total_Planned_Hours__c))
+                                                 c(`Planned Hours Completed (Last Month)`, 
+                                                   Submitted_Hours__c, 
+                                                   Submitted_against_Planned__c, 
+                                                   Under_Planned_Hours__c, 
+                                                   Total_Planned_Hours__c))
 
 planned_hours_completed_location <- create_metrics(milestones_with_monthly_hours,
                                                    categories = c(Metric = "Planned Hours Completed",
@@ -995,9 +1035,12 @@ planned_hours_completed_location <- create_metrics(milestones_with_monthly_hours
                                                                     "WhistleB", 
                                                                     "Other"),
                                                    .groups = c(Group = Group,
-                                                               Month = Month_Actual_Go_Live__c,
+                                                               Month = Month_Calculated_For__c,
                                                                Location = Milestone_PM__r.pse__Region__r.Name),
-                                                 c(`Planned Hours Completed (Last Month)`, Submitted_Hours__c, Submitted_against_Planned__c, Under_Planned_Hours__c))
+                                                 c(`Planned Hours Completed (Last Month)`, 
+                                                   Submitted_Hours__c, 
+                                                   Submitted_against_Planned__c, 
+                                                   Under_Planned_Hours__c))
 ## Hour Overages ----
 hour_overages_region <- create_metrics(milestones_with_monthly_hours,
                                        categories = c(Metric = "Hour Overages",
@@ -1010,7 +1053,10 @@ hour_overages_region <- create_metrics(milestones_with_monthly_hours,
                                        .groups = c(Group = Group,
                                                    Month = Month_new_project_hours_date,
                                                    Region = Account__r.Reporting_Region__c),
-                                       c(`Hour Overages (Last Month)` = Submitted_against_Planned__c))
+                                       c(`Hour Overages (Last Month)` = Submitted_against_Planned__c, 
+                                         Planned_Hours_Overages_Last_Month__c, 
+                                         Overage_Hours__c, 
+                                         Submitted_Hours__c))
 
 hour_overages_location <- create_metrics(milestones_with_monthly_hours,
                                          categories = c(Metric = "Hour Overages",
@@ -1023,7 +1069,10 @@ hour_overages_location <- create_metrics(milestones_with_monthly_hours,
                                          .groups = c(Group = Group,
                                                      Month = Month_new_project_hours_date,
                                                      Location = Milestone_PM__r.pse__Region__r.Name),
-                                         c(`Hour Overages (Last Month)` = Submitted_against_Planned__c, Planned_Hours_Overages_Last_Month__c, Overage_Hours__c, Submitted_Hours__c))
+                                         c(`Hour Overages (Last Month)` = Submitted_against_Planned__c, 
+                                           Planned_Hours_Overages_Last_Month__c, 
+                                           Overage_Hours__c, 
+                                           Submitted_Hours__c))
 
 ## Hour Overages for % Complete Milestones ----
 hour_overages_percent_completed_region <- create_metrics(milestones_with_monthly_hours,
@@ -1245,7 +1294,7 @@ opened_customer_support_cases_location <- create_metrics(csr_cases,
                                                              .fn = list(count = n_distinct),
                                                          .filter = CreatedDate >= from_date & CreatedDate <= to_date,
                                                          .groups = c(Month = Month_CreatedDate,
-                                                                     Location = Owner__r.Location__c, 
+                                                                     Location = Contact.pse__Region__r.Name, 
                                                                      Product = Product),
                                                          c(`Opened Cases` = Id))
 
@@ -1281,7 +1330,7 @@ closed_customer_support_cases_location <- create_metrics(csr_cases,
                                                          .filter = ClosedDate >= from_date & 
                                                            ClosedDate <= to_date,
                                                          .groups = c(Month = Month_ClosedDate,
-                                                                     Location = Owner__r.Location__c, 
+                                                                     Location = Contact.pse__Region__r.Name, 
                                                                      Product = Product),
                                                          c(`Closed Cases` = Id))
 
@@ -1318,7 +1367,7 @@ opened_discontinuation_cases_location <- create_metrics(dc_cases,
                                                        .filter = CreatedDate >= from_date & 
                                                          CreatedDate <= to_date,
                                                        .groups = c(Month = Month_CreatedDate,
-                                                                   Location = Owner__r.Location__c),
+                                                                   Location = Contact.pse__Region__r.Name),
                                                        c(`Opened Cases` = Id))
 
 
@@ -1352,7 +1401,7 @@ closed_discontinuation_cases_location <- create_metrics(dc_cases,
                                                         .fn = list(count = n_distinct),
                                                         .filter = ClosedDate >= from_date & ClosedDate <= to_date,
                                                         .groups = c(Month = Month_ClosedDate,
-                                                                    Location = Owner__r.Location__c),
+                                                                    Location = Contact.pse__Region__r.Name),
                                                         c(`Opened Cases` = Id))
 
 
@@ -1377,7 +1426,7 @@ customer_support_backlog_location <- create_metrics(csr_cases,
                                                     .filter = IsClosed==FALSE &
                                                       Skill__c != "RiskRate - Renewals" & 
                                                       Defect_Enhancement__c==FALSE,
-                                                    .groups = c(Location = Owner__r.Location__c, 
+                                                    .groups = c(Location = Contact.pse__Region__r.Name, 
                                                                 Product = Product),
                                                     c(`Backlog (48 Hour)`, `Backlog (10 Day)`, `Backlog (30 Day)`))
 
@@ -1407,7 +1456,7 @@ initial_response_time_location <- create_metrics(csr_cases,
                                                    CreatedDate >= from_date & 
                                                    CreatedDate <= to_date,
                                                  .groups = c(Month = Month_CreatedDate,
-                                                             Location = Owner__r.Location__c, 
+                                                             Location = Contact.pse__Region__r.Name, 
                                                              Product = Product),
                                                  c(`Initial Response Hours`))
 
@@ -1451,7 +1500,7 @@ avg_time_to_resolution_location <- create_metrics(csr_cases,
                                                    ClosedDate >= from_date & 
                                                    ClosedDate <= to_date,
                                                  .groups = c(Month = Month_ClosedDate,
-                                                             Location = Owner__r.Location__c, 
+                                                             Location = Contact.pse__Region__r.Name, 
                                                              Product = Product),
                                                  c(`Resolution Hours`))
 
